@@ -12,6 +12,12 @@ Release/
 *.map
 *.su
 
+# Ek build ciktilari
+build/
+*.obj
+*.lst
+
 # OS
 Thumbs.db
 .DS_Store
+desktop.ini

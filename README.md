@@ -18,6 +18,13 @@ Temel çevre birimlerini öğrenme projesi:
 - Harici kesme (EXTI) + debounce
 - Timer kesmesiyle periyodik olay
 
+### 03-onchip-modbus — On-Chip Telemetri & Kontrol (Modbus RTU)
+STM32WB55'in dahili sıcaklık sensörü, VDDA ve uptime değerlerini ve kart üstündeki
+LED/butonları Modbus RTU üzerinden kullanan proje (dış donanım gerektirmez).
+- Oku: sıcaklık `40050` (°C×10), sıcaklık ham `40051`, VDDA mV `40052`, uptime `40053`
+- Coil→LED: LD1/LD2/LD3 (PB5/PB0/PB1); Discrete Input→buton: SW1/SW2/SW3 (PC4/PD0/PD1)
+- LPUART1 (PA2 TX / PA3 RX) 9600 8N1, Waveshare FT232 USB-TTL
+
 ## Donanım
 - Kart: NUCLEO-WB55RG (MB1355D-01), MCU STM32WB55RGV6
 - Araçlar: STM32CubeMX + STM32CubeIDE
