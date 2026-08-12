@@ -1,0 +1,17 @@
+# STM32CubeIDE build ciktilari (her projede)
+Debug/
+Release/
+
+# Derleme / ara dosyalar
+*.o
+*.d
+*.elf
+*.bin
+*.hex
+*.list
+*.map
+*.su
+
+# OS
+Thumbs.db
+.DS_Store
