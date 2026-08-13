@@ -25,6 +25,14 @@ LED/butonları Modbus RTU üzerinden kullanan proje (dış donanım gerektirmez)
 - Coil→LED: LD1/LD2/LD3 (PB5/PB0/PB1); Discrete Input→buton: SW1/SW2/SW3 (PC4/PD0/PD1)
 - LPUART1 (PA2 TX / PA3 RX) 9600 8N1, Waveshare FT232 USB-TTL
 
+### WB55_BLE_Phone_Control — BLE Telefon Kontrolü + Health Thermometer
+NUCLEO-WB55RG üzerinde BLE ile telefon (iPhone / ST BLE Toolbox) kontrolü. Cihaz adı `WB55_CTRL`.
+- Custom P2P Service: `FE41` (telefon→MCU) 2 bayt LED komutu ile LD1/LD2/LD3 (Read + Write + Write w/o Response)
+- `FE42` (MCU→telefon) SW1/SW2/SW3 için notification (polling + debounce)
+- Bluetooth SIG Health Thermometer Service (0x1809): MCU **iç die sıcaklığı** (ADC1 + VREFINT + fabrika kalibrasyonu) °C olarak gönderiliyor
+- P2P Server ve Health Thermometer aynı anda çalışıyor
+- Detay: bkz. [`WB55_BLE_Phone_Control/README.md`](WB55_BLE_Phone_Control/README.md)
+
 ## Donanım
 - Kart: NUCLEO-WB55RG (MB1355D-01), MCU STM32WB55RGV6
 - Araçlar: STM32CubeMX + STM32CubeIDE
