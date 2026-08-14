@@ -75,6 +75,9 @@ HAL_StatusTypeDef Custom_APP_Read_Internal_Temperature(
     int32_t *temperature_c
 );
 
+HAL_StatusTypeDef Custom_APP_Read_VDDA(
+    uint32_t *vdda_mv
+);
 /* USER CODE END EF */
 
 #ifdef __cplusplus

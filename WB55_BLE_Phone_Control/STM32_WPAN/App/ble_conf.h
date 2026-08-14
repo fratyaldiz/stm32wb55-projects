@@ -59,10 +59,10 @@
  ******************************************************************************/
 /**< Options: Supported(1) or Not Supported(0) */
 #define BLE_CFG_DIS_MANUFACTURER_NAME_STRING                                   1
-#define BLE_CFG_DIS_MODEL_NUMBER_STRING                                        0
+#define BLE_CFG_DIS_MODEL_NUMBER_STRING                                        1
 #define BLE_CFG_DIS_SERIAL_NUMBER_STRING                                       0
-#define BLE_CFG_DIS_HARDWARE_REVISION_STRING                                   0
-#define BLE_CFG_DIS_FIRMWARE_REVISION_STRING                                   0
+#define BLE_CFG_DIS_HARDWARE_REVISION_STRING                                   1
+#define BLE_CFG_DIS_FIRMWARE_REVISION_STRING                                   1
 #define BLE_CFG_DIS_SOFTWARE_REVISION_STRING                                   0
 #define BLE_CFG_DIS_SYSTEM_ID                                                  0
 #define BLE_CFG_DIS_IEEE_CERTIFICATION                                         0

@@ -265,6 +265,9 @@ static void Connection_Interval_Update_Req(void);
 
 /* USER CODE BEGIN PFP */
 
+static void Adv_Cancel_Req(void);
+static void Switch_OFF_GPIO(void);
+
 /* USER CODE END PFP */
 
 /* External variables --------------------------------------------------------*/
@@ -281,6 +284,16 @@ void APP_BLE_Init(void)
   tBleStatus ret = BLE_STATUS_INVALID_PARAMS;
 #endif /* RADIO_ACTIVITY_EVENT != 0 */
   /* USER CODE BEGIN APP_BLE_Init_1 */
+
+  /*
+   * CubeMX tarafindan uretilen ancak mevcut
+   * konfigürasyonda kullanilmayan semboller.
+   * Sadece compiler warning'lerini bastirmak icin
+   * referans veriyoruz; runtime davranisi degismez.
+   */
+  (void)a_LocalName;
+  (void)Adv_Cancel_Req;
+  (void)Switch_OFF_GPIO;
 
   /* USER CODE END APP_BLE_Init_1 */
   SHCI_C2_Ble_Init_Cmd_Packet_t ble_init_cmd_packet =
@@ -1148,6 +1161,14 @@ static void Adv_Request(APP_BLE_ConnStatus_t NewStatus)
   }
 
 /* USER CODE BEGIN Adv_Request_1*/
+
+  /*
+   * CubeMX bu iki advertising interval degerini
+   * hesapliyor ancak mevcut generated kodda
+   * kullanmiyor.
+   */
+  (void)Min_Inter;
+  (void)Max_Inter;
 
 /* USER CODE END Adv_Request_1*/
 

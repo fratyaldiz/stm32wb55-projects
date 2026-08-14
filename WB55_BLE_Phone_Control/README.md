@@ -6,7 +6,9 @@ connects over Bluetooth Low Energy and:
 - controls the three on-board LEDs (phone → MCU),
 - receives notifications when the three user buttons are pressed (MCU → phone),
 - reads the MCU's **internal die temperature** through the standard Bluetooth
-  Health Thermometer Service.
+  Health Thermometer Service,
+- reads on-chip **diagnostics** (VDDA, uptime, last reset reason) over dedicated
+  BLE characteristics, backed by an **independent watchdog (IWDG)** for recovery.
 
 Internship / learning project. Generated with STM32CubeMX, built with STM32CubeIDE.
 
@@ -14,11 +16,13 @@ Internship / learning project. Generated with STM32CubeMX, built with STM32CubeI
 
 The firmware runs two BLE features at the same time on one connection:
 
-1. A **Custom P2P Service** (ST P2P Server template) for LED control and button
-   notifications, using the `FE41` and `FE42` characteristics.
+1. A **Custom P2P Service** for LED control (`FE41`), button notifications (`FE42`),
+   and read-only **diagnostics**: VDDA (`FE43`), uptime (`FE44`), reset reason (`FE45`).
 2. The **Bluetooth SIG Health Thermometer Service (0x1809)** that reports the
    real MCU internal temperature as a proper temperature value (e.g. `31.0 °C`)
    instead of raw HEX.
+3. The **Device Information Service** (manufacturer, model, HW/FW revision) and an
+   **independent watchdog (IWDG)** that resets the MCU if the main loop stalls.
 
 The device advertises as **`WB55_CTRL`**.
 
@@ -56,8 +60,13 @@ FE42:
 MCU → Phone
 SW1 / SW2 / SW3 notifications
 
+FE43 / FE44 / FE45 (read):
+VDDA (mV) / uptime (s) / reset reason (bitmask)
+
 Health Thermometer Service:
 MCU internal temperature → °C
+
+Device Information Service + IWDG watchdog
 ```
 
 Advertising name / device name: **`WB55_CTRL`**.
@@ -65,12 +74,15 @@ P2P Server and Health Thermometer run **simultaneously** on the same connection.
 
 ## P2P Service
 
-Custom P2P service with two characteristics:
+Custom P2P service characteristics:
 
 | Characteristic | Direction    | Purpose                         | Properties                                |
 |----------------|--------------|---------------------------------|-------------------------------------------|
 | `FE41`         | Phone → MCU  | LED control (LD1/LD2/LD3)       | Read, Write, Write Without Response       |
 | `FE42`         | MCU → Phone  | Button notifications (SW1/2/3)  | Notify                                    |
+| `FE43`         | MCU → Phone  | VDDA in mV                      | Read                                      |
+| `FE44`         | MCU → Phone  | Uptime in seconds               | Read                                      |
+| `FE45`         | MCU → Phone  | Last reset reason (bitmask)     | Read                                      |
 
 ## LED Command Protocol
 
@@ -105,6 +117,53 @@ Note: the earlier `04XX` temperature packet on `FE42` was **removed**. `FE42` no
 carries only SW1/SW2/SW3 notifications; temperature is reported through the Health
 Thermometer Service instead.
 
+## Diagnostics Characteristics (FE43 / FE44 / FE45)
+
+Three read-only characteristics expose on-chip diagnostics. All multi-byte values
+are **little-endian**.
+
+- **`FE43` — VDDA**: `uint16`, millivolts. Computed from VREFINT (see below).
+  Example: `EC 0C` = `0x0CEC` = 3308 mV = **3.308 V**.
+- **`FE44` — Uptime**: `uint32`, seconds since boot.
+- **`FE45` — Reset Reason**: `uint16` bitmask. The MCU captures the RCC reset flags
+  once at boot, clears them, and writes the value into the `FE45` GATT attribute:
+
+  | Bit | Flag      | Meaning                    |
+  |-----|-----------|----------------------------|
+  | 0   | `PINRST`  | Pin (NRST) reset           |
+  | 1   | `BORRST`  | Brown-out reset            |
+  | 2   | `SFTRST`  | Software reset             |
+  | 3   | `IWDGRST` | Independent watchdog reset |
+  | 4   | `WWDGRST` | Window watchdog reset      |
+  | 5   | `LPWRRST` | Low-power reset            |
+  | 6   | `OBLRST`  | Option-byte loader reset   |
+
+  Examples: `01 00` = `0x0001` = `PINRST` (normal power-up / button reset).
+  `09 00` = `0x0009` = `PINRST | IWDGRST` (recovery after a watchdog timeout).
+
+## Watchdog (IWDG) Recovery
+
+An **Independent Watchdog** protects against a stalled main loop:
+
+- Prescaler `64`, Window `4095`, Reload `4095` → nominal timeout ≈ **8.2 s**.
+- Production firmware feeds it with `HAL_IWDG_Refresh(&hiwdg)` in the main loop.
+- If the loop stops refreshing, the IWDG resets the MCU; the next boot reports the
+  event through `FE45` (`IWDGRST` bit set).
+
+> The temporary SW1-triggered starvation test used to validate the watchdog was
+> removed. Production firmware has **no** SW1 watchdog control.
+
+## Device Information Service
+
+Standard BLE **Device Information Service** exposes:
+
+| Field             | Value                |
+|-------------------|----------------------|
+| Manufacturer      | `STMicroelectronics` |
+| Model             | `NUCLEO-WB55RG`      |
+| Hardware Revision | `MB1355D-01`         |
+| Firmware Revision | `1.0.0`              |
+
 ## Health Thermometer Service
 
 Standard Bluetooth SIG **Health Thermometer Service (UUID `0x1809`)**. The measured
@@ -123,7 +182,8 @@ Measurement chain:
 1. **ADC1** samples the internal temperature sensor channel and the internal
    voltage reference **VREFINT**.
 2. VREFINT is used to compute the real **VDDA**, so the reading is corrected for the
-   actual supply voltage.
+   actual supply voltage. The same shared ADC helper produces the VDDA value exposed
+   on `FE43`.
 3. The temperature is computed from the **STM32 factory calibration values**
    (`TS_CAL1` / `TS_CAL2`) using the ST calibration macros.
 4. The result is formatted for the Health Thermometer Temperature Measurement
@@ -154,24 +214,25 @@ Only source and project files needed to rebuild are committed. Build outputs
    and watch the `xx 01` / `xx 00` notifications.
 5. **Temperature:** open the Health Thermometer Service and read the temperature —
    it is shown directly in °C.
+6. **Diagnostics:** read `FE43` (VDDA, mV), `FE44` (uptime, s) and `FE45` (reset
+   reason). A normal power-up reads `FE45` = `01 00`; after an IWDG timeout it reads
+   `09 00`.
 
 ## Current Status
 
 Physical acceptance test on real board + iPhone — all passing:
 
-| Feature                          | Result |
-|----------------------------------|:------:|
-| LD1 control                      | ✅     |
-| LD2 control                      | ✅     |
-| LD3 control                      | ✅     |
-| SW1 notification                 | ✅     |
-| SW2 notification                 | ✅     |
-| SW3 notification                 | ✅     |
-| Health Thermometer real temp     | ✅     |
-| P2P + HTS running together       | ✅     |
+| Feature                              | Result |
+|--------------------------------------|:------:|
+| LD1 / LD2 / LD3 control (`FE41`)      | ✅     |
+| SW1 / SW2 / SW3 notification (`FE42`) | ✅     |
+| VDDA read (`FE43`, `EC0C` = 3.308 V)  | ✅     |
+| Uptime read (`FE44`)                  | ✅     |
+| Reset reason (`FE45`, `0100`/`0900`)  | ✅     |
+| IWDG watchdog reset + recovery        | ✅     |
+| Health Thermometer real temp (31.0 °C)| ✅     |
+| Device Information Service            | ✅     |
+| P2P + HTS running together            | ✅     |
 
-**Build:** `0 errors`. The firmware links successfully
-(`text 41188 / data 2325 / bss 3411` bytes). A full clean rebuild emits **13 benign
-compiler warnings** — all `-Wunused-*` (unused function / variable) notices in the
-ST CubeMX-generated template code (`app_ble.c`, `hts_app.c`); they have **no effect
-on functionality**. Incremental IDE builds (no recompile) report `0 warnings`.
+**Build:** `0 errors, 0 warnings` (clean rebuild, STM32CubeIDE 2.2.0 toolchain).
+The firmware links successfully (`text 43476 / data 2397 / bss 3947` bytes).

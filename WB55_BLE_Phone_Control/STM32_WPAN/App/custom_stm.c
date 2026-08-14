@@ -31,6 +31,9 @@ typedef struct{
   uint16_t  CustomMy_P2PHdle;                    /**< My_P2P_Server handle */
   uint16_t  CustomLed_CHdle;                  /**< My_LED_Char handle */
   uint16_t  CustomSwitch_CHdle;                  /**< My_Switch_Char handle */
+  uint16_t  CustomVdda_CHdle;                  /**< VDDA handle */
+  uint16_t  CustomUptime_CHdle;                  /**< Uptime handle */
+  uint16_t  CustomReset_CHdle;                  /**< Reset_Reason handle */
 /* USER CODE BEGIN Context */
   /* Place holder for Characteristic Descriptors Handle*/
 
@@ -67,6 +70,9 @@ extern uint16_t Connection_Handle;
 /* Private variables ---------------------------------------------------------*/
 uint16_t SizeLed_C = 2;
 uint16_t SizeSwitch_C = 2;
+uint16_t SizeVdda_C = 2;
+uint16_t SizeUptime_C = 4;
+uint16_t SizeReset_C = 2;
 
 /**
  * START of Section BLE_DRIVER_CONTEXT
@@ -108,6 +114,9 @@ do {\
 #define COPY_MY_P2P_SERVER_UUID(uuid_struct)          COPY_UUID_128(uuid_struct,0x00,0x00,0xfe,0x40,0xcc,0x7a,0x48,0x2a,0x98,0x4a,0x7f,0x2e,0xd5,0xb3,0xe5,0x8f)
 #define COPY_MY_LED_CHAR_UUID(uuid_struct)    COPY_UUID_128(uuid_struct,0x00,0x00,0xfe,0x41,0x8e,0x22,0x45,0x41,0x9d,0x4c,0x21,0xed,0xae,0x82,0xed,0x19)
 #define COPY_MY_SWITCH_CHAR_UUID(uuid_struct)    COPY_UUID_128(uuid_struct,0x00,0x00,0xfe,0x42,0x8e,0x22,0x45,0x41,0x9d,0x4c,0x21,0xed,0xae,0x82,0xed,0x19)
+#define COPY_VDDA_UUID(uuid_struct)    COPY_UUID_128(uuid_struct,0x00,0x00,0xfe,0x43,0x8e,0x22,0x45,0x41,0x9d,0x4c,0x21,0xed,0xae,0x82,0xed,0x19)
+#define COPY_UPTIME_UUID(uuid_struct)    COPY_UUID_128(uuid_struct,0x00,0x00,0xfe,0x44,0x8e,0x22,0x45,0x41,0x9d,0x4c,0x21,0xed,0xae,0x82,0xed,0x19)
+#define COPY_RESET_REASON_UUID(uuid_struct)    COPY_UUID_128(uuid_struct,0x00,0x00,0xfe,0x45,0x8e,0x22,0x45,0x41,0x9d,0x4c,0x21,0xed,0xae,0x82,0xed,0x19)
 
 /* USER CODE BEGIN PF */
 
@@ -124,6 +133,7 @@ static SVCCTL_EvtAckStatus_t Custom_STM_Event_Handler(void *Event)
   hci_event_pckt *event_pckt;
   evt_blecore_aci *blecore_evt;
   aci_gatt_attribute_modified_event_rp0 *attribute_modified;
+  aci_gatt_read_permit_req_event_rp0    *read_req;
   aci_gatt_notification_complete_event_rp0    *notification_complete;
   Custom_STM_App_Notification_evt_t     Notification;
   /* USER CODE BEGIN Custom_STM_Event_Handler_1 */
@@ -219,6 +229,55 @@ static SVCCTL_EvtAckStatus_t Custom_STM_Event_Handler(void *Event)
           /* USER CODE BEGIN EVT_BLUE_GATT_READ_PERMIT_REQ_BEGIN */
 
           /* USER CODE END EVT_BLUE_GATT_READ_PERMIT_REQ_BEGIN */
+          read_req = (aci_gatt_read_permit_req_event_rp0*)blecore_evt->data;
+          if (read_req->Attribute_Handle == (CustomContext.CustomVdda_CHdle + CHARACTERISTIC_VALUE_ATTRIBUTE_OFFSET))
+          {
+            return_value = SVCCTL_EvtAckFlowEnable;
+            /*USER CODE BEGIN CUSTOM_STM_Service_1_Char_3_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_1 */
+
+            Notification.Custom_Evt_Opcode =
+                CUSTOM_STM_VDDA_C_READ_EVT;
+
+            Custom_STM_App_Notification(&Notification);
+
+            /*USER CODE END CUSTOM_STM_Service_1_Char_3_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_1*/
+            aci_gatt_allow_read(read_req->Connection_Handle);
+            /*USER CODE BEGIN CUSTOM_STM_Service_1_Char_3_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_2 */
+
+            /*USER CODE END CUSTOM_STM_Service_1_Char_3_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_2*/
+          } /* if (read_req->Attribute_Handle == (CustomContext.CustomVdda_CHdle + CHARACTERISTIC_VALUE_ATTRIBUTE_OFFSET))*/
+          else if (read_req->Attribute_Handle == (CustomContext.CustomUptime_CHdle + CHARACTERISTIC_VALUE_ATTRIBUTE_OFFSET))
+          {
+            return_value = SVCCTL_EvtAckFlowEnable;
+            /*USER CODE BEGIN CUSTOM_STM_Service_1_Char_4_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_1 */
+
+            Notification.Custom_Evt_Opcode =
+                CUSTOM_STM_UPTIME_C_READ_EVT;
+
+            Custom_STM_App_Notification(&Notification);
+
+            /*USER CODE END CUSTOM_STM_Service_1_Char_4_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_1*/
+            aci_gatt_allow_read(read_req->Connection_Handle);
+            /*USER CODE BEGIN CUSTOM_STM_Service_1_Char_4_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_2 */
+
+            /*USER CODE END CUSTOM_STM_Service_1_Char_4_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_2*/
+          } /* if (read_req->Attribute_Handle == (CustomContext.CustomUptime_CHdle + CHARACTERISTIC_VALUE_ATTRIBUTE_OFFSET))*/
+          else if (read_req->Attribute_Handle == (CustomContext.CustomReset_CHdle + CHARACTERISTIC_VALUE_ATTRIBUTE_OFFSET))
+          {
+            return_value = SVCCTL_EvtAckFlowEnable;
+            /*USER CODE BEGIN CUSTOM_STM_Service_1_Char_5_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_1 */
+
+            /*
+             * Reset reason is written to the GATT database once during
+             * Custom_APP_Init(). Nothing needs to be recalculated here.
+             */
+
+            /*USER CODE END CUSTOM_STM_Service_1_Char_5_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_1*/
+            aci_gatt_allow_read(read_req->Connection_Handle);
+            /*USER CODE BEGIN CUSTOM_STM_Service_1_Char_5_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_2 */
+
+            /*USER CODE END CUSTOM_STM_Service_1_Char_5_ACI_GATT_READ_PERMIT_REQ_VSEVT_CODE_2*/
+          } /* if (read_req->Attribute_Handle == (CustomContext.CustomReset_CHdle + CHARACTERISTIC_VALUE_ATTRIBUTE_OFFSET))*/
           /* USER CODE BEGIN EVT_BLUE_GATT_READ_PERMIT_REQ_END */
 
           /* USER CODE END EVT_BLUE_GATT_READ_PERMIT_REQ_END */
@@ -306,17 +365,20 @@ void SVCCTL_InitCustomSvc(void)
   /**
    *          My_P2P_Server
    *
-   * Max_Attribute_Records = 1 + 2*2 + 1*no_of_char_with_notify_or_indicate_property + 1*no_of_char_with_broadcast_property
+   * Max_Attribute_Records = 1 + 2*5 + 1*no_of_char_with_notify_or_indicate_property + 1*no_of_char_with_broadcast_property
    * service_max_attribute_record = 1 for My_P2P_Server +
    *                                2 for My_LED_Char +
    *                                2 for My_Switch_Char +
+   *                                2 for VDDA +
+   *                                2 for Uptime +
+   *                                2 for Reset_Reason +
    *                                1 for My_Switch_Char configuration descriptor +
-   *                              = 6
+   *                              = 12
    *
    * This value doesn't take into account number of descriptors manually added
    * In case of descriptors added, please update the max_attr_record value accordingly in the next SVCCTL_InitService User Section
    */
-  max_attr_record = 6;
+  max_attr_record = 12;
 
   /* USER CODE BEGIN SVCCTL_InitService1 */
   /* max_attr_record to be updated if descriptors have been added */
@@ -390,6 +452,84 @@ void SVCCTL_InitCustomSvc(void)
   /* Place holder for Characteristic Descriptors */
 
   /* USER CODE END SVCCTL_Init_Service1_Char2 */
+  /**
+   *  VDDA
+   */
+  COPY_VDDA_UUID(uuid.Char_UUID_128);
+  ret = aci_gatt_add_char(CustomContext.CustomMy_P2PHdle,
+                          UUID_TYPE_128, &uuid,
+                          SizeVdda_C,
+                          CHAR_PROP_READ,
+                          ATTR_PERMISSION_NONE,
+                          GATT_NOTIFY_ATTRIBUTE_WRITE | GATT_NOTIFY_WRITE_REQ_AND_WAIT_FOR_APPL_RESP | GATT_NOTIFY_READ_REQ_AND_WAIT_FOR_APPL_RESP,
+                          0x10,
+                          CHAR_VALUE_LEN_CONSTANT,
+                          &(CustomContext.CustomVdda_CHdle));
+  if (ret != BLE_STATUS_SUCCESS)
+  {
+    APP_DBG_MSG("  Fail   : aci_gatt_add_char command   : VDDA_C, error code: 0x%x \n\r", ret);
+  }
+  else
+  {
+    APP_DBG_MSG("  Success: aci_gatt_add_char command   : VDDA_C , handle = 0x%04x \n\r", CustomContext.CustomVdda_CHdle);
+  }
+
+  /* USER CODE BEGIN SVCCTL_Init_Service1_Char3 */
+  /* Place holder for Characteristic Descriptors */
+
+  /* USER CODE END SVCCTL_Init_Service1_Char3 */
+  /**
+   *  Uptime
+   */
+  COPY_UPTIME_UUID(uuid.Char_UUID_128);
+  ret = aci_gatt_add_char(CustomContext.CustomMy_P2PHdle,
+                          UUID_TYPE_128, &uuid,
+                          SizeUptime_C,
+                          CHAR_PROP_READ,
+                          ATTR_PERMISSION_NONE,
+                          GATT_NOTIFY_ATTRIBUTE_WRITE | GATT_NOTIFY_WRITE_REQ_AND_WAIT_FOR_APPL_RESP | GATT_NOTIFY_READ_REQ_AND_WAIT_FOR_APPL_RESP,
+                          0x10,
+                          CHAR_VALUE_LEN_CONSTANT,
+                          &(CustomContext.CustomUptime_CHdle));
+  if (ret != BLE_STATUS_SUCCESS)
+  {
+    APP_DBG_MSG("  Fail   : aci_gatt_add_char command   : UPTIME_C, error code: 0x%x \n\r", ret);
+  }
+  else
+  {
+    APP_DBG_MSG("  Success: aci_gatt_add_char command   : UPTIME_C , handle = 0x%04x \n\r", CustomContext.CustomUptime_CHdle);
+  }
+
+  /* USER CODE BEGIN SVCCTL_Init_Service1_Char4 */
+  /* Place holder for Characteristic Descriptors */
+
+  /* USER CODE END SVCCTL_Init_Service1_Char4 */
+  /**
+   *  Reset_Reason
+   */
+  COPY_RESET_REASON_UUID(uuid.Char_UUID_128);
+  ret = aci_gatt_add_char(CustomContext.CustomMy_P2PHdle,
+                          UUID_TYPE_128, &uuid,
+                          SizeReset_C,
+                          CHAR_PROP_READ,
+                          ATTR_PERMISSION_NONE,
+                          GATT_NOTIFY_ATTRIBUTE_WRITE | GATT_NOTIFY_WRITE_REQ_AND_WAIT_FOR_APPL_RESP | GATT_NOTIFY_READ_REQ_AND_WAIT_FOR_APPL_RESP,
+                          0x10,
+                          CHAR_VALUE_LEN_CONSTANT,
+                          &(CustomContext.CustomReset_CHdle));
+  if (ret != BLE_STATUS_SUCCESS)
+  {
+    APP_DBG_MSG("  Fail   : aci_gatt_add_char command   : RESET_C, error code: 0x%x \n\r", ret);
+  }
+  else
+  {
+    APP_DBG_MSG("  Success: aci_gatt_add_char command   : RESET_C , handle = 0x%04x \n\r", CustomContext.CustomReset_CHdle);
+  }
+
+  /* USER CODE BEGIN SVCCTL_Init_Service1_Char5 */
+  /* Place holder for Characteristic Descriptors */
+
+  /* USER CODE END SVCCTL_Init_Service1_Char5 */
 
   /* USER CODE BEGIN SVCCTL_InitCustomSvc_2 */
 
@@ -450,6 +590,63 @@ tBleStatus Custom_STM_App_Update_Char(Custom_STM_Char_Opcode_t CharOpcode, uint8
       /* USER CODE BEGIN CUSTOM_STM_App_Update_Service_1_Char_2*/
 
       /* USER CODE END CUSTOM_STM_App_Update_Service_1_Char_2*/
+      break;
+
+    case CUSTOM_STM_VDDA_C:
+      ret = aci_gatt_update_char_value(CustomContext.CustomMy_P2PHdle,
+                                       CustomContext.CustomVdda_CHdle,
+                                       0, /* charValOffset */
+                                       SizeVdda_C, /* charValueLen */
+                                       (uint8_t *)  pPayload);
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : aci_gatt_update_char_value VDDA_C command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: aci_gatt_update_char_value VDDA_C command\n\r");
+      }
+      /* USER CODE BEGIN CUSTOM_STM_App_Update_Service_1_Char_3*/
+
+      /* USER CODE END CUSTOM_STM_App_Update_Service_1_Char_3*/
+      break;
+
+    case CUSTOM_STM_UPTIME_C:
+      ret = aci_gatt_update_char_value(CustomContext.CustomMy_P2PHdle,
+                                       CustomContext.CustomUptime_CHdle,
+                                       0, /* charValOffset */
+                                       SizeUptime_C, /* charValueLen */
+                                       (uint8_t *)  pPayload);
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : aci_gatt_update_char_value UPTIME_C command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: aci_gatt_update_char_value UPTIME_C command\n\r");
+      }
+      /* USER CODE BEGIN CUSTOM_STM_App_Update_Service_1_Char_4*/
+
+      /* USER CODE END CUSTOM_STM_App_Update_Service_1_Char_4*/
+      break;
+
+    case CUSTOM_STM_RESET_C:
+      ret = aci_gatt_update_char_value(CustomContext.CustomMy_P2PHdle,
+                                       CustomContext.CustomReset_CHdle,
+                                       0, /* charValOffset */
+                                       SizeReset_C, /* charValueLen */
+                                       (uint8_t *)  pPayload);
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : aci_gatt_update_char_value RESET_C command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: aci_gatt_update_char_value RESET_C command\n\r");
+      }
+      /* USER CODE BEGIN CUSTOM_STM_App_Update_Service_1_Char_5*/
+
+      /* USER CODE END CUSTOM_STM_App_Update_Service_1_Char_5*/
       break;
 
     default:
@@ -518,6 +715,63 @@ tBleStatus Custom_STM_App_Update_Char_Variable_Length(Custom_STM_Char_Opcode_t C
       /* USER CODE END Custom_STM_App_Update_Char_Variable_Length_Service_1_Char_2*/
       break;
 
+    case CUSTOM_STM_VDDA_C:
+      ret = aci_gatt_update_char_value(CustomContext.CustomMy_P2PHdle,
+                                       CustomContext.CustomVdda_CHdle,
+                                       0, /* charValOffset */
+                                       size, /* charValueLen */
+                                       (uint8_t *)  pPayload);
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : aci_gatt_update_char_value VDDA_C command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: aci_gatt_update_char_value VDDA_C command\n\r");
+      }
+      /* USER CODE BEGIN Custom_STM_App_Update_Char_Variable_Length_Service_1_Char_3*/
+
+      /* USER CODE END Custom_STM_App_Update_Char_Variable_Length_Service_1_Char_3*/
+      break;
+
+    case CUSTOM_STM_UPTIME_C:
+      ret = aci_gatt_update_char_value(CustomContext.CustomMy_P2PHdle,
+                                       CustomContext.CustomUptime_CHdle,
+                                       0, /* charValOffset */
+                                       size, /* charValueLen */
+                                       (uint8_t *)  pPayload);
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : aci_gatt_update_char_value UPTIME_C command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: aci_gatt_update_char_value UPTIME_C command\n\r");
+      }
+      /* USER CODE BEGIN Custom_STM_App_Update_Char_Variable_Length_Service_1_Char_4*/
+
+      /* USER CODE END Custom_STM_App_Update_Char_Variable_Length_Service_1_Char_4*/
+      break;
+
+    case CUSTOM_STM_RESET_C:
+      ret = aci_gatt_update_char_value(CustomContext.CustomMy_P2PHdle,
+                                       CustomContext.CustomReset_CHdle,
+                                       0, /* charValOffset */
+                                       size, /* charValueLen */
+                                       (uint8_t *)  pPayload);
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : aci_gatt_update_char_value RESET_C command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: aci_gatt_update_char_value RESET_C command\n\r");
+      }
+      /* USER CODE BEGIN Custom_STM_App_Update_Char_Variable_Length_Service_1_Char_5*/
+
+      /* USER CODE END Custom_STM_App_Update_Char_Variable_Length_Service_1_Char_5*/
+      break;
+
     default:
       break;
   }
@@ -567,6 +821,54 @@ tBleStatus Custom_STM_App_Update_Char_Ext(uint16_t Connection_Handle, Custom_STM
 
       /* USER CODE END Updated_Length_Service_1_Char_2*/
       ret = Generic_STM_App_Update_Char_Ext(Connection_Handle, CustomContext.CustomMy_P2PHdle, CustomContext.CustomSwitch_CHdle, SizeSwitch_C, pPayload);
+
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : Generic_STM_App_Update_Char_Ext command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: Generic_STM_App_Update_Char_Ext command\n\r");
+      }
+      break;
+
+    case CUSTOM_STM_VDDA_C:
+      /* USER CODE BEGIN Updated_Length_Service_1_Char_3*/
+
+      /* USER CODE END Updated_Length_Service_1_Char_3*/
+      ret = Generic_STM_App_Update_Char_Ext(Connection_Handle, CustomContext.CustomMy_P2PHdle, CustomContext.CustomVdda_CHdle, SizeVdda_C, pPayload);
+
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : Generic_STM_App_Update_Char_Ext command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: Generic_STM_App_Update_Char_Ext command\n\r");
+      }
+      break;
+
+    case CUSTOM_STM_UPTIME_C:
+      /* USER CODE BEGIN Updated_Length_Service_1_Char_4*/
+
+      /* USER CODE END Updated_Length_Service_1_Char_4*/
+      ret = Generic_STM_App_Update_Char_Ext(Connection_Handle, CustomContext.CustomMy_P2PHdle, CustomContext.CustomUptime_CHdle, SizeUptime_C, pPayload);
+
+      if (ret != BLE_STATUS_SUCCESS)
+      {
+        APP_DBG_MSG("  Fail   : Generic_STM_App_Update_Char_Ext command, result : 0x%x \n\r", ret);
+      }
+      else
+      {
+        APP_DBG_MSG("  Success: Generic_STM_App_Update_Char_Ext command\n\r");
+      }
+      break;
+
+    case CUSTOM_STM_RESET_C:
+      /* USER CODE BEGIN Updated_Length_Service_1_Char_5*/
+
+      /* USER CODE END Updated_Length_Service_1_Char_5*/
+      ret = Generic_STM_App_Update_Char_Ext(Connection_Handle, CustomContext.CustomMy_P2PHdle, CustomContext.CustomReset_CHdle, SizeReset_C, pPayload);
 
       if (ret != BLE_STATUS_SUCCESS)
       {

@@ -107,7 +107,6 @@ static void HTSAPP_UpdateMeasurement( void )
   );
 
 /* USER CODE END HTSAPP_UpdateMeasurement */
-
   return;
 }
 
@@ -212,13 +211,35 @@ void HTS_App_Notification(HTS_App_Notification_evt_t *pNotification)
   }
 
 /* USER CODE END HTS_App_Notification */
-
   return;
 }
 
 void HTSAPP_Init(void)
 {
 /* USER CODE BEGIN HTSAPP_Init */
+	  /*
+	   * CubeMX HTS template'inde mevcut konfigurasyonda
+	   * kullanilmayan yardimci semboller.
+	   * Runtime davranisini degistirmeden compiler
+	   * warning'lerini engellemek icin referans veriyoruz.
+	   */
+	  (void)HTSMeasurement;
+	  (void)HTS_CurrentIndex;
+	  (void)HTS_OldIndex;
+
+	#if (BLE_CFG_HTS_INTERMEDIATE_TEMPERATURE == 1)
+	  (void)HTSAPP_UpdateIntermediateTemperature;
+	#endif
+
+	#if (BLE_CFG_HTS_MEASUREMENT_INTERVAL == 1)
+	  (void)HTSAPP_UpdateMeasurementInterval;
+	#endif
+
+	#if (BLE_CFG_HTS_TIME_STAMP_FLAG != 0)
+	  (void)HTSAPP_Update_TimeStamp;
+	  (void)HTSAPP_Store;
+	  (void)HTSAPP_Suppress;
+	#endif
 
   /*
    * Sicaklik olcum task'ini sequencer'a kaydet.
@@ -268,8 +289,7 @@ void HTSAPP_Init(void)
   HTSAPP_Context.TimerMeasurementStarted = 0U;
 
 /* USER CODE END HTSAPP_Init */
-
-  return;
+return;
 }
 
 void HTSAPP_Measurement(void)
@@ -317,7 +337,6 @@ void HTSAPP_Measurement(void)
   }
 
 /* USER CODE END HTSAPP_Measurement */
-
   return;
 }
 

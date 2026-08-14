@@ -59,6 +59,18 @@ extern "C" {
 #define DISAPP_MANUFACTURER_ID                0x9ABCDE
 /* USER CODE BEGIN EM */
 
+#undef DISAPP_MANUFACTURER_NAME
+#define DISAPP_MANUFACTURER_NAME        "STMicroelectronics"
+
+#undef DISAPP_MODEL_NUMBER
+#define DISAPP_MODEL_NUMBER             "NUCLEO-WB55RG"
+
+#undef DISAPP_HARDWARE_REVISION_NUMBER
+#define DISAPP_HARDWARE_REVISION_NUMBER "MB1355D-01"
+
+#undef DISAPP_FIRMWARE_REVISION_NUMBER
+#define DISAPP_FIRMWARE_REVISION_NUMBER "1.0.0"
+
 /* USER CODE END EM */
 
 /* Exported functions ------------------------------------------------------- */

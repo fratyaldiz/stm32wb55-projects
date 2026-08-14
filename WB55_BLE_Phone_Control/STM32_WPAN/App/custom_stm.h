@@ -37,6 +37,9 @@ typedef enum
   /* My_P2P_Server */
   CUSTOM_STM_LED_C,
   CUSTOM_STM_SWITCH_C,
+  CUSTOM_STM_VDDA_C,
+  CUSTOM_STM_UPTIME_C,
+  CUSTOM_STM_RESET_C,
 } Custom_STM_Char_Opcode_t;
 
 typedef enum
@@ -48,6 +51,12 @@ typedef enum
   /* My_Switch_Char */
   CUSTOM_STM_SWITCH_C_NOTIFY_ENABLED_EVT,
   CUSTOM_STM_SWITCH_C_NOTIFY_DISABLED_EVT,
+  /* VDDA */
+  CUSTOM_STM_VDDA_C_READ_EVT,
+  /* Uptime */
+  CUSTOM_STM_UPTIME_C_READ_EVT,
+  /* Reset_Reason */
+  CUSTOM_STM_RESET_C_READ_EVT,
   CUSTOM_STM_NOTIFICATION_COMPLETE_EVT,
 
   CUSTOM_STM_BOOT_REQUEST_EVT
@@ -75,6 +84,9 @@ typedef struct
 /* Exported constants --------------------------------------------------------*/
 extern uint16_t SizeLed_C;
 extern uint16_t SizeSwitch_C;
+extern uint16_t SizeVdda_C;
+extern uint16_t SizeUptime_C;
+extern uint16_t SizeReset_C;
 
 /* USER CODE BEGIN EC */
 

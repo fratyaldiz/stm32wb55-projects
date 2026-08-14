@@ -63,12 +63,6 @@
 #define CFG_FAST_CONN_ADV_INTERVAL_MAX    (0x00A0)      /**< 100ms */
 #define CFG_LP_CONN_ADV_INTERVAL_MIN      (0x640)     /**< 1s */
 #define CFG_LP_CONN_ADV_INTERVAL_MAX      (0xFA0)     /**< 2.5s */
-/* USER CODE BEGIN Advertising_Defines */
-
-#define ADV_TYPE    ADV_IND
-#define ADV_FILTER  NO_WHITE_LIST_USE
-
-/* USER CODE END Advertising_Defines */
 /**
  * Define IO Authentication
  */
@@ -153,6 +147,9 @@
 #define CFG_USE_SMPS    0
 
 /* USER CODE BEGIN Generic_Parameters */
+
+#define ADV_TYPE    ADV_IND
+#define ADV_FILTER  NO_WHITE_LIST_USE
 
 /* USER CODE END Generic_Parameters */
 

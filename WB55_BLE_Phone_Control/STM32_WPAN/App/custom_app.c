@@ -54,6 +54,13 @@ typedef struct
 #define SW1_POLL_PERIOD_MS       20U
 #define SW1_DEBOUNCE_SAMPLES     3U
 
+#define RESET_REASON_PINRST   (1U << 0)
+#define RESET_REASON_BORRST   (1U << 1)
+#define RESET_REASON_SFTRST   (1U << 2)
+#define RESET_REASON_IWDGRST  (1U << 3)
+#define RESET_REASON_WWDGRST  (1U << 4)
+#define RESET_REASON_LPWRRST  (1U << 5)
+#define RESET_REASON_OBLRST   (1U << 6)
 
 /* USER CODE END PD */
 
@@ -91,9 +98,8 @@ static uint8_t Switch_LastNotifiedState[3] =
   0xFFU,
   0xFFU
 };
+static uint16_t ResetReason = 0U;
 extern ADC_HandleTypeDef hadc1;
-
-
 
 /* USER CODE END PV */
 
@@ -107,6 +113,10 @@ static void Custom_Switch_c_Send_Notification(void);
 
 HAL_StatusTypeDef Custom_APP_Read_Internal_Temperature(
     int32_t *temperature_c
+);
+static HAL_StatusTypeDef Custom_APP_Read_Internal_ADC(
+    uint32_t *vref_raw,
+    uint32_t *temp_raw
 );
 /* USER CODE END PFP */
 
@@ -248,6 +258,92 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
       /* USER CODE END CUSTOM_STM_SWITCH_C_NOTIFY_DISABLED_EVT */
       break;
 
+    case CUSTOM_STM_VDDA_C_READ_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_VDDA_C_READ_EVT */
+
+    {
+      uint32_t vdda_mv;
+      uint16_t vdda_value;
+
+      /*
+       * VREFINT kullanarak VDDA degerini mV cinsinden oku.
+       */
+      if (Custom_APP_Read_VDDA(&vdda_mv) == HAL_OK)
+      {
+        /*
+         * FE43 characteristic 2 byte oldugu icin
+         * uint16_t olarak gonder.
+         */
+        vdda_value = (uint16_t)vdda_mv;
+
+        /*
+         * Little-endian:
+         * Byte 0 = LSB
+         * Byte 1 = MSB
+         */
+        UpdateCharData[0] =
+            (uint8_t)(vdda_value & 0x00FFU);
+
+        UpdateCharData[1] =
+            (uint8_t)((vdda_value >> 8) & 0x00FFU);
+
+        (void)Custom_STM_App_Update_Char(
+            CUSTOM_STM_VDDA_C,
+            (uint8_t *)UpdateCharData
+        );
+      }
+    }
+      /* USER CODE END CUSTOM_STM_VDDA_C_READ_EVT */
+      break;
+
+    case CUSTOM_STM_UPTIME_C_READ_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_UPTIME_C_READ_EVT */
+    {
+      uint32_t uptime_seconds;
+
+      /*
+       * HAL_GetTick() milisaniye cinsindendir.
+       * BLE uzerinden uptime'i saniye olarak gonder.
+       */
+      uptime_seconds = HAL_GetTick() / 1000U;
+
+      /*
+       * 32-bit little-endian:
+       * Byte 0 = en dusuk byte
+       * Byte 3 = en yuksek byte
+       */
+      UpdateCharData[0] =
+          (uint8_t)(uptime_seconds & 0x000000FFU);
+
+      UpdateCharData[1] =
+          (uint8_t)((uptime_seconds >> 8) & 0x000000FFU);
+
+      UpdateCharData[2] =
+          (uint8_t)((uptime_seconds >> 16) & 0x000000FFU);
+
+      UpdateCharData[3] =
+          (uint8_t)((uptime_seconds >> 24) & 0x000000FFU);
+
+      (void)Custom_STM_App_Update_Char(
+          CUSTOM_STM_UPTIME_C,
+          (uint8_t *)UpdateCharData
+      );
+    }
+
+      /* USER CODE END CUSTOM_STM_UPTIME_C_READ_EVT */
+      break;
+
+    case CUSTOM_STM_RESET_C_READ_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_RESET_C_READ_EVT */
+
+      /*
+       * FE45 value is captured and written once in Custom_APP_Init().
+       * The read-permit handler only allows the client read.
+       */
+
+      /* USER CODE END CUSTOM_STM_RESET_C_READ_EVT */
+      break;
+
     case CUSTOM_STM_NOTIFICATION_COMPLETE_EVT:
       /* USER CODE BEGIN CUSTOM_STM_NOTIFICATION_COMPLETE_EVT */
 
@@ -317,6 +413,66 @@ void Custom_APP_Init(void)
 {
   /* USER CODE BEGIN CUSTOM_APP_Init */
 
+  ResetReason = 0U;
+
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_PINRST) != RESET)
+  {
+    ResetReason |= RESET_REASON_PINRST;
+  }
+
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_BORRST) != RESET)
+  {
+    ResetReason |= RESET_REASON_BORRST;
+  }
+
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST) != RESET)
+  {
+    ResetReason |= RESET_REASON_SFTRST;
+  }
+
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) != RESET)
+  {
+    ResetReason |= RESET_REASON_IWDGRST;
+  }
+
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_WWDGRST) != RESET)
+  {
+    ResetReason |= RESET_REASON_WWDGRST;
+  }
+
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_LPWRRST) != RESET)
+  {
+    ResetReason |= RESET_REASON_LPWRRST;
+  }
+
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_OBLRST) != RESET)
+  {
+    ResetReason |= RESET_REASON_OBLRST;
+  }
+
+  /*
+   * Sonraki resetin eski flag'lerle karismamasi icin
+   * mevcut reset flag'lerini temizle.
+   */
+  __HAL_RCC_CLEAR_RESET_FLAGS();
+
+  /*
+   * FE45 Reset Reason bu boot boyunca sabittir.
+   * Yakalanan 16-bit maskeyi GATT veritabanina bir kez yaz.
+   *
+   * FE45 = uint16_t, little-endian.
+   */
+  UpdateCharData[0] =
+      (uint8_t)(ResetReason & 0x00FFU);
+
+  UpdateCharData[1] =
+      (uint8_t)((ResetReason >> 8) & 0x00FFU);
+
+  (void)Custom_STM_App_Update_Char(
+      CUSTOM_STM_RESET_C,
+      (uint8_t *)UpdateCharData
+  );
+
   Custom_App_Context.Switch_c_Notification_Status = 0U;
 
   /*
@@ -371,8 +527,6 @@ void Custom_APP_Init(void)
   {
     Error_Handler();
   }
-
-
 
   /* USER CODE END CUSTOM_APP_Init */
   return;
@@ -466,15 +620,12 @@ void Custom_APP_Process(void)
     }
   }
 }
-HAL_StatusTypeDef Custom_APP_Read_Internal_Temperature(
-    int32_t *temperature_c
+static HAL_StatusTypeDef Custom_APP_Read_Internal_ADC(
+    uint32_t *vref_raw,
+    uint32_t *temp_raw
 )
 {
-  uint32_t vref_raw;
-  uint32_t temp_raw;
-  uint32_t vdda_mv;
-
-  if (temperature_c == NULL)
+  if ((vref_raw == NULL) || (temp_raw == NULL))
   {
     return HAL_ERROR;
   }
@@ -499,7 +650,7 @@ HAL_StatusTypeDef Custom_APP_Read_Internal_Temperature(
     return HAL_TIMEOUT;
   }
 
-  vref_raw = HAL_ADC_GetValue(&hadc1);
+  *vref_raw = HAL_ADC_GetValue(&hadc1);
 
   /*
    * Rank 2: internal temperature sensor
@@ -510,20 +661,43 @@ HAL_StatusTypeDef Custom_APP_Read_Internal_Temperature(
     return HAL_TIMEOUT;
   }
 
-  temp_raw = HAL_ADC_GetValue(&hadc1);
+  *temp_raw = HAL_ADC_GetValue(&hadc1);
 
   HAL_ADC_Stop(&hadc1);
 
-  /*
-   * Sifira bolme korumasi.
-   */
-  if (vref_raw == 0U)
+  if (*vref_raw == 0U)
   {
     return HAL_ERROR;
   }
 
+  return HAL_OK;
+}
+HAL_StatusTypeDef Custom_APP_Read_Internal_Temperature(
+    int32_t *temperature_c
+)
+{
+  uint32_t vref_raw;
+  uint32_t temp_raw;
+  uint32_t vdda_mv;
+  HAL_StatusTypeDef status;
+
+  if (temperature_c == NULL)
+  {
+    return HAL_ERROR;
+  }
+
+  status = Custom_APP_Read_Internal_ADC(
+      &vref_raw,
+      &temp_raw
+  );
+
+  if (status != HAL_OK)
+  {
+    return status;
+  }
+
   /*
-   * Once gercek VDDA/VREF+ degerini hesapla.
+   * Gercek VDDA/VREF+ degerini hesapla.
    */
   vdda_mv =
       __HAL_ADC_CALC_VREFANALOG_VOLTAGE(
@@ -532,13 +706,48 @@ HAL_StatusTypeDef Custom_APP_Read_Internal_Temperature(
       );
 
   /*
-   * STM32'nin fabrikada yazilmis sicaklik
-   * kalibrasyon degerlerini kullanarak derece C hesapla.
+   * Fabrika sicaklik kalibrasyon degerleri ile
+   * MCU internal die temperature hesapla.
    */
   *temperature_c =
       __HAL_ADC_CALC_TEMPERATURE(
           vdda_mv,
           temp_raw,
+          ADC_RESOLUTION_12B
+      );
+
+  return HAL_OK;
+}
+HAL_StatusTypeDef Custom_APP_Read_VDDA(
+    uint32_t *vdda_mv
+)
+{
+  uint32_t vref_raw;
+  uint32_t temp_raw;
+  HAL_StatusTypeDef status;
+
+  if (vdda_mv == NULL)
+  {
+    return HAL_ERROR;
+  }
+
+  status = Custom_APP_Read_Internal_ADC(
+      &vref_raw,
+      &temp_raw
+  );
+
+  if (status != HAL_OK)
+  {
+    return status;
+  }
+
+  /*
+   * VREFINT fabrika kalibrasyonunu kullanarak
+   * gercek VDDA/VREF+ degerini mV cinsinden hesapla.
+   */
+  *vdda_mv =
+      __HAL_ADC_CALC_VREFANALOG_VOLTAGE(
+          vref_raw,
           ADC_RESOLUTION_12B
       );
 

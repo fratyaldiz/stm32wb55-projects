@@ -25,7 +25,7 @@
 
 /* Private includes -----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "dis.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -89,6 +89,64 @@ static const uint8_t pnp_id[BLE_CFG_DIS_PNP_ID_LEN_MAX] =
 void DISAPP_Init(void)
 {
 /* USER CODE BEGIN DISAPP_Init */
+
+  DIS_Data_t dis_data;
+
+#if (BLE_CFG_DIS_MANUFACTURER_NAME_STRING != 0)
+  static uint8_t manufacturer_name[] =
+      DISAPP_MANUFACTURER_NAME;
+
+  dis_data.pPayload = manufacturer_name;
+  dis_data.Length =
+      (uint8_t)(sizeof(manufacturer_name) - 1U);
+
+  (void)DIS_UpdateChar(
+      MANUFACTURER_NAME_UUID,
+      &dis_data
+  );
+#endif
+
+#if (BLE_CFG_DIS_MODEL_NUMBER_STRING != 0)
+  static uint8_t model_number[] =
+      DISAPP_MODEL_NUMBER;
+
+  dis_data.pPayload = model_number;
+  dis_data.Length =
+      (uint8_t)(sizeof(model_number) - 1U);
+
+  (void)DIS_UpdateChar(
+      MODEL_NUMBER_UUID,
+      &dis_data
+  );
+#endif
+
+#if (BLE_CFG_DIS_HARDWARE_REVISION_STRING != 0)
+  static uint8_t hardware_revision[] =
+      DISAPP_HARDWARE_REVISION_NUMBER;
+
+  dis_data.pPayload = hardware_revision;
+  dis_data.Length =
+      (uint8_t)(sizeof(hardware_revision) - 1U);
+
+  (void)DIS_UpdateChar(
+      HARDWARE_REVISION_UUID,
+      &dis_data
+  );
+#endif
+
+#if (BLE_CFG_DIS_FIRMWARE_REVISION_STRING != 0)
+  static uint8_t firmware_revision[] =
+      DISAPP_FIRMWARE_REVISION_NUMBER;
+
+  dis_data.pPayload = firmware_revision;
+  dis_data.Length =
+      (uint8_t)(sizeof(firmware_revision) - 1U);
+
+  (void)DIS_UpdateChar(
+      FIRMWARE_REVISION_UUID,
+      &dis_data
+  );
+#endif
 
 /* USER CODE END DISAPP_Init */
 }
