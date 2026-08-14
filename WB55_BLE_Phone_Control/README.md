@@ -16,8 +16,10 @@ Internship / learning project. Generated with STM32CubeMX, built with STM32CubeI
 
 The firmware runs two BLE features at the same time on one connection:
 
-1. A **Custom P2P Service** for LED control (`FE41`), button notifications (`FE42`),
-   and read-only **diagnostics**: VDDA (`FE43`), uptime (`FE44`), reset reason (`FE45`).
+1. A **Custom P2P Service** for LED control (`FE41`) and button notifications (`FE42`),
+   plus a full on-chip **diagnostics** set: VDDA (`FE43`), uptime (`FE44`), reset
+   reason (`FE45`), connection stats (`FE46`), button press counters (`FE47`),
+   software reset (`FE48`), connection duration (`FE49`) and clear diagnostics (`FE4A`).
 2. The **Bluetooth SIG Health Thermometer Service (0x1809)** that reports the
    real MCU internal temperature as a proper temperature value (e.g. `31.0 °C`)
    instead of raw HEX.
@@ -60,8 +62,9 @@ FE42:
 MCU → Phone
 SW1 / SW2 / SW3 notifications
 
-FE43 / FE44 / FE45 (read):
-VDDA (mV) / uptime (s) / reset reason (bitmask)
+FE43..FE4A (diagnostics):
+VDDA / uptime / reset reason / conn stats /
+button counters / SW reset / conn duration / clear
 
 Health Thermometer Service:
 MCU internal temperature → °C
@@ -83,6 +86,11 @@ Custom P2P service characteristics:
 | `FE43`         | MCU → Phone  | VDDA in mV                      | Read                                      |
 | `FE44`         | MCU → Phone  | Uptime in seconds               | Read                                      |
 | `FE45`         | MCU → Phone  | Last reset reason (bitmask)     | Read                                      |
+| `FE46`         | MCU → Phone  | Connection stats                | Read                                      |
+| `FE47`         | MCU → Phone  | Button press counters           | Read                                      |
+| `FE48`         | Phone → MCU  | Software reset (magic command)  | Write                                     |
+| `FE49`         | MCU → Phone  | Current connection duration     | Read                                      |
+| `FE4A`         | Phone → MCU  | Clear diagnostics (magic cmd)   | Write                                     |
 
 ## LED Command Protocol
 
@@ -117,10 +125,9 @@ Note: the earlier `04XX` temperature packet on `FE42` was **removed**. `FE42` no
 carries only SW1/SW2/SW3 notifications; temperature is reported through the Health
 Thermometer Service instead.
 
-## Diagnostics Characteristics (FE43 / FE44 / FE45)
+## Diagnostics Characteristics (FE43 – FE4A)
 
-Three read-only characteristics expose on-chip diagnostics. All multi-byte values
-are **little-endian**.
+On-chip diagnostics characteristics. All multi-byte values are **little-endian**.
 
 - **`FE43` — VDDA**: `uint16`, millivolts. Computed from VREFINT (see below).
   Example: `EC 0C` = `0x0CEC` = 3308 mV = **3.308 V**.
@@ -140,6 +147,20 @@ are **little-endian**.
 
   Examples: `01 00` = `0x0001` = `PINRST` (normal power-up / button reset).
   `09 00` = `0x0009` = `PINRST | IWDGRST` (recovery after a watchdog timeout).
+  `05 00` = `0x0005` = `PINRST | SFTRST` (after an `FE48` software reset).
+- **`FE46` — Connection Stats** (read): active connection state, total connection
+  count and total disconnection count.
+- **`FE47` — Button Press Counters** (read): debounced press counters for
+  SW1 / SW2 / SW3, each `uint16`. Kept in RAM until the next MCU reset.
+- **`FE48` — Software Reset** (write-only): accepts only the 2-byte magic command
+  **`A5 5A`**; after a 200 ms delay it calls `NVIC_SystemReset()`. Any other value is
+  ignored. After the reset `FE45` reads `05 00` (`SFTRST`).
+- **`FE49` — Connection Duration** (read): `uint32`, seconds. Reset to 0 at the start
+  of every BLE connection; increases while connected.
+- **`FE4A` — Clear Diagnostics** (write-only): accepts only the 2-byte magic command
+  **`C3 3C`**; clears the connection/disconnection counts and the SW1/SW2/SW3 press
+  counters **without** resetting the MCU. The active connection state, `FE49`
+  connection duration and `FE45` reset reason are **preserved**.
 
 ## Watchdog (IWDG) Recovery
 
@@ -214,9 +235,13 @@ Only source and project files needed to rebuild are committed. Build outputs
    and watch the `xx 01` / `xx 00` notifications.
 5. **Temperature:** open the Health Thermometer Service and read the temperature —
    it is shown directly in °C.
-6. **Diagnostics:** read `FE43` (VDDA, mV), `FE44` (uptime, s) and `FE45` (reset
-   reason). A normal power-up reads `FE45` = `01 00`; after an IWDG timeout it reads
-   `09 00`.
+6. **Diagnostics:** read `FE43` (VDDA, mV), `FE44` (uptime, s), `FE45` (reset
+   reason), `FE46` (connection stats), `FE47` (button counters) and `FE49`
+   (connection duration). A normal power-up reads `FE45` = `01 00`.
+7. **Software reset:** write `A5 5A` to `FE48`; the board resets after ~200 ms and
+   `FE45` then reads `05 00` (`SFTRST`).
+8. **Clear diagnostics:** write `C3 3C` to `FE4A`; connection/button counters reset
+   to 0 while the connection stays up and `FE45` is unchanged.
 
 ## Current Status
 
@@ -229,10 +254,15 @@ Physical acceptance test on real board + iPhone — all passing:
 | VDDA read (`FE43`, `EC0C` = 3.308 V)  | ✅     |
 | Uptime read (`FE44`)                  | ✅     |
 | Reset reason (`FE45`, `0100`/`0900`)  | ✅     |
+| Connection stats (`FE46`)             | ✅     |
+| Button press counters (`FE47`)        | ✅     |
+| Software reset (`FE48`, `A5 5A`)       | ✅     |
+| Connection duration (`FE49`)          | ✅     |
+| Clear diagnostics (`FE4A`, `C3 3C`)    | ✅     |
 | IWDG watchdog reset + recovery        | ✅     |
 | Health Thermometer real temp (31.0 °C)| ✅     |
 | Device Information Service            | ✅     |
 | P2P + HTS running together            | ✅     |
 
 **Build:** `0 errors, 0 warnings` (clean rebuild, STM32CubeIDE 2.2.0 toolchain).
-The firmware links successfully (`text 43476 / data 2397 / bss 3947` bytes).
+The firmware links successfully (`text 45456 / data 2405 / bss 3979` bytes).

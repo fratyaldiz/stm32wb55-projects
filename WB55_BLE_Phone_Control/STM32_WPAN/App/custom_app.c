@@ -37,6 +37,7 @@ typedef struct
 {
   /* My_P2P_Server */
   uint8_t               Switch_c_Notification_Status;
+  /* Diagnostics_Service */
   /* USER CODE BEGIN CUSTOM_APP_Context_t */
 
   /* USER CODE END CUSTOM_APP_Context_t */
@@ -61,6 +62,21 @@ typedef struct
 #define RESET_REASON_WWDGRST  (1U << 4)
 #define RESET_REASON_LPWRRST  (1U << 5)
 #define RESET_REASON_OBLRST   (1U << 6)
+
+/*
+ * FE48 Software Reset command:
+ * Only the exact 2-byte magic value A5 5A is accepted.
+ */
+#define SOFTWARE_RESET_MAGIC_BYTE_0    0xA5U
+#define SOFTWARE_RESET_MAGIC_BYTE_1    0x5AU
+#define SOFTWARE_RESET_DELAY_MS        200U
+
+/*
+ * FE4A Clear Diagnostics command:
+ * Only the exact 2-byte magic value C3 3C is accepted.
+ */
+#define CLEAR_DIAG_MAGIC_BYTE_0        0xC3U
+#define CLEAR_DIAG_MAGIC_BYTE_1        0x3CU
 
 /* USER CODE END PD */
 
@@ -99,6 +115,23 @@ static uint8_t Switch_LastNotifiedState[3] =
   0xFFU
 };
 static uint16_t ResetReason = 0U;
+
+/* BLE connection diagnostics (cleared on MCU reset). */
+static uint8_t BleConnectionActive = 0U;
+static uint16_t BleConnectionCount = 0U;
+static uint16_t BleDisconnectionCount = 0U;
+static uint32_t BleConnectionStartTick = 0U;
+
+/* Debounced button press counters (cleared on MCU reset). */
+static uint16_t ButtonPressCount[3] = {0U, 0U, 0U};
+
+/*
+ * Software reset is armed in the BLE write callback and executed later
+ * from Custom_APP_Process(), outside the BLE event callback.
+ */
+static uint8_t SoftwareResetPending = 0U;
+static uint32_t SoftwareResetRequestTick = 0U;
+
 extern ADC_HandleTypeDef hadc1;
 
 /* USER CODE END PV */
@@ -109,6 +142,8 @@ static void Custom_Switch_c_Update_Char(void);
 
 static void Custom_Switch_c_Send_Notification(void);
 
+/* Diagnostics_Service */
+
 /* USER CODE BEGIN PFP */
 
 HAL_StatusTypeDef Custom_APP_Read_Internal_Temperature(
@@ -118,6 +153,9 @@ static HAL_StatusTypeDef Custom_APP_Read_Internal_ADC(
     uint32_t *vref_raw,
     uint32_t *temp_raw
 );
+static void Custom_APP_Update_Connection_Stats(void);
+static void Custom_APP_Update_Button_Counters(void);
+static void Custom_APP_Update_Connection_Duration(void);
 /* USER CODE END PFP */
 
 /* Functions Definition ------------------------------------------------------*/
@@ -209,7 +247,6 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
                   gpio_state
               );
               break;
-
             default:
               /*
                * Gecersiz LED numarasi.
@@ -344,6 +381,108 @@ void Custom_STM_App_Notification(Custom_STM_App_Notification_evt_t *pNotificatio
       /* USER CODE END CUSTOM_STM_RESET_C_READ_EVT */
       break;
 
+    /* Diagnostics_Service */
+    case CUSTOM_STM_CONN_STATS_READ_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_CONN_STATS_READ_EVT */
+
+      /*
+       * FE46 BLE Connection Stats is refreshed immediately before
+       * the client read is allowed.
+       */
+      Custom_APP_Update_Connection_Stats();
+
+      /* USER CODE END CUSTOM_STM_CONN_STATS_READ_EVT */
+      break;
+
+    case CUSTOM_STM_BUTTON_CNT_READ_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_BUTTON_CNT_READ_EVT */
+
+      /*
+       * FE47 Button Press Counters is refreshed immediately before
+       * the client read is allowed.
+       */
+      Custom_APP_Update_Button_Counters();
+
+      /* USER CODE END CUSTOM_STM_BUTTON_CNT_READ_EVT */
+      break;
+
+    case CUSTOM_STM_SW_RESET_WRITE_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_SW_RESET_WRITE_EVT */
+
+      /*
+       * Accept only the exact 2-byte magic command A5 5A.
+       * Invalid values are ignored so an accidental write cannot reset the MCU.
+       */
+      if ((pNotification->DataTransfered.pPayload != NULL) &&
+          (pNotification->DataTransfered.Length == 2U) &&
+          (pNotification->DataTransfered.pPayload[0] ==
+              SOFTWARE_RESET_MAGIC_BYTE_0) &&
+          (pNotification->DataTransfered.pPayload[1] ==
+              SOFTWARE_RESET_MAGIC_BYTE_1))
+      {
+        if (SoftwareResetPending == 0U)
+        {
+          SoftwareResetRequestTick = HAL_GetTick();
+          SoftwareResetPending = 1U;
+        }
+      }
+
+      /* USER CODE END CUSTOM_STM_SW_RESET_WRITE_EVT */
+      break;
+
+    case CUSTOM_STM_CONN_TIME_READ_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_CONN_TIME_READ_EVT */
+
+      /*
+       * FE49 Connection Duration is refreshed immediately before
+       * the client read is allowed.
+       */
+      Custom_APP_Update_Connection_Duration();
+
+      /* USER CODE END CUSTOM_STM_CONN_TIME_READ_EVT */
+      break;
+
+    case CUSTOM_STM_CLEAR_DIAG_WRITE_EVT:
+      /* USER CODE BEGIN CUSTOM_STM_CLEAR_DIAG_WRITE_EVT */
+
+      /*
+       * Accept only the exact 2-byte magic command C3 3C.
+       *
+       * Clear:
+       *   - BLE connection count
+       *   - BLE disconnection count
+       *   - SW1/SW2/SW3 press counters
+       *
+       * Keep:
+       *   - current BLE connection state
+       *   - FE49 current connection duration
+       *   - FE45 reset reason
+       */
+      if ((pNotification->DataTransfered.pPayload != NULL) &&
+          (pNotification->DataTransfered.Length == 2U) &&
+          (pNotification->DataTransfered.pPayload[0] ==
+              CLEAR_DIAG_MAGIC_BYTE_0) &&
+          (pNotification->DataTransfered.pPayload[1] ==
+              CLEAR_DIAG_MAGIC_BYTE_1))
+      {
+        BleConnectionCount = 0U;
+        BleDisconnectionCount = 0U;
+
+        ButtonPressCount[0] = 0U;
+        ButtonPressCount[1] = 0U;
+        ButtonPressCount[2] = 0U;
+
+        /*
+         * Refresh cached GATT values immediately.
+         * FE46 keeps Byte0 = current connection state.
+         */
+        Custom_APP_Update_Connection_Stats();
+        Custom_APP_Update_Button_Counters();
+      }
+
+      /* USER CODE END CUSTOM_STM_CLEAR_DIAG_WRITE_EVT */
+      break;
+
     case CUSTOM_STM_NOTIFICATION_COMPLETE_EVT:
       /* USER CODE BEGIN CUSTOM_STM_NOTIFICATION_COMPLETE_EVT */
 
@@ -378,7 +517,15 @@ void Custom_APP_Notification(Custom_App_ConnHandle_Not_evt_t *pNotification)
 
       /*
        * BLE connection kuruldu.
+       * Sayaclar MCU resetlenene kadar RAM'de tutulur.
        */
+      BleConnectionActive = 1U;
+      BleConnectionStartTick = HAL_GetTick();
+
+      if (BleConnectionCount < 0xFFFFU)
+      {
+        BleConnectionCount++;
+      }
 
       /* USER CODE END CUSTOM_CONN_HANDLE_EVT */
       break;
@@ -388,9 +535,16 @@ void Custom_APP_Notification(Custom_App_ConnHandle_Not_evt_t *pNotification)
 
       /*
        * BLE connection koptugunda notification
-       * durumunu sifirla.
+       * durumunu sifirla ve diagnostics sayacini guncelle.
        */
       Custom_App_Context.Switch_c_Notification_Status = 0U;
+      BleConnectionActive = 0U;
+      BleConnectionStartTick = 0U;
+
+      if (BleDisconnectionCount < 0xFFFFU)
+      {
+        BleDisconnectionCount++;
+      }
 
       /* USER CODE END CUSTOM_DISCON_HANDLE_EVT */
       break;
@@ -414,6 +568,15 @@ void Custom_APP_Init(void)
   /* USER CODE BEGIN CUSTOM_APP_Init */
 
   ResetReason = 0U;
+  BleConnectionActive = 0U;
+  BleConnectionCount = 0U;
+  BleDisconnectionCount = 0U;
+  BleConnectionStartTick = 0U;
+  ButtonPressCount[0] = 0U;
+  ButtonPressCount[1] = 0U;
+  ButtonPressCount[2] = 0U;
+  SoftwareResetPending = 0U;
+  SoftwareResetRequestTick = 0U;
 
   if (__HAL_RCC_GET_FLAG(RCC_FLAG_PINRST) != RESET)
   {
@@ -534,12 +697,109 @@ void Custom_APP_Init(void)
 
 /* USER CODE BEGIN FD */
 
+static void Custom_APP_Update_Connection_Stats(void)
+{
+  /*
+   * FE46 payload (5 bytes):
+   *
+   * Byte 0   = current BLE connection state (0 = disconnected, 1 = connected)
+   * Byte 1-2 = total connection count since MCU boot, little-endian
+   * Byte 3-4 = total disconnection count since MCU boot, little-endian
+   */
+  UpdateCharData[0] = BleConnectionActive;
+
+  UpdateCharData[1] =
+      (uint8_t)(BleConnectionCount & 0x00FFU);
+  UpdateCharData[2] =
+      (uint8_t)((BleConnectionCount >> 8) & 0x00FFU);
+
+  UpdateCharData[3] =
+      (uint8_t)(BleDisconnectionCount & 0x00FFU);
+  UpdateCharData[4] =
+      (uint8_t)((BleDisconnectionCount >> 8) & 0x00FFU);
+
+  (void)Custom_STM_App_Update_Char(
+      CUSTOM_STM_CONN_STATS,
+      (uint8_t *)UpdateCharData
+  );
+}
+
+static void Custom_APP_Update_Button_Counters(void)
+{
+  /*
+   * FE47 payload (6 bytes):
+   *
+   * Byte 0-1 = SW1 press count since MCU boot, little-endian
+   * Byte 2-3 = SW2 press count since MCU boot, little-endian
+   * Byte 4-5 = SW3 press count since MCU boot, little-endian
+   */
+  UpdateCharData[0] =
+      (uint8_t)(ButtonPressCount[0] & 0x00FFU);
+  UpdateCharData[1] =
+      (uint8_t)((ButtonPressCount[0] >> 8) & 0x00FFU);
+
+  UpdateCharData[2] =
+      (uint8_t)(ButtonPressCount[1] & 0x00FFU);
+  UpdateCharData[3] =
+      (uint8_t)((ButtonPressCount[1] >> 8) & 0x00FFU);
+
+  UpdateCharData[4] =
+      (uint8_t)(ButtonPressCount[2] & 0x00FFU);
+  UpdateCharData[5] =
+      (uint8_t)((ButtonPressCount[2] >> 8) & 0x00FFU);
+
+  (void)Custom_STM_App_Update_Char(
+      CUSTOM_STM_BUTTON_CNT,
+      (uint8_t *)UpdateCharData
+  );
+}
+
+static void Custom_APP_Update_Connection_Duration(void)
+{
+  uint32_t connection_seconds = 0U;
+
+  /*
+   * FE49 payload (4 bytes):
+   * Current BLE connection duration in seconds, uint32 little-endian.
+   */
+  if (BleConnectionActive != 0U)
+  {
+    connection_seconds =
+        (HAL_GetTick() - BleConnectionStartTick) / 1000U;
+  }
+
+  UpdateCharData[0] =
+      (uint8_t)(connection_seconds & 0x000000FFU);
+  UpdateCharData[1] =
+      (uint8_t)((connection_seconds >> 8) & 0x000000FFU);
+  UpdateCharData[2] =
+      (uint8_t)((connection_seconds >> 16) & 0x000000FFU);
+  UpdateCharData[3] =
+      (uint8_t)((connection_seconds >> 24) & 0x000000FFU);
+
+  (void)Custom_STM_App_Update_Char(
+      CUSTOM_STM_CONN_TIME,
+      (uint8_t *)UpdateCharData
+  );
+}
+
 void Custom_APP_Process(void)
 {
   uint32_t now;
   uint8_t raw_state[3];
 
   now = HAL_GetTick();
+
+  /*
+   * Execute an armed FE48 software reset outside the BLE callback.
+   * The short delay gives the BLE write transaction time to finish cleanly.
+   */
+  if ((SoftwareResetPending != 0U) &&
+      ((now - SoftwareResetRequestTick) >= SOFTWARE_RESET_DELAY_MS))
+  {
+    SoftwareResetPending = 0U;
+    NVIC_SystemReset();
+  }
 
   /*
    * Butonlari her 20 ms'de bir oku.
@@ -589,6 +849,19 @@ void Custom_APP_Process(void)
 
     if (Switch_SameSampleCount[i] >= SW1_DEBOUNCE_SAMPLES)
     {
+      /*
+       * Count only a new debounced press transition:
+       * released (0) -> pressed (1).
+       */
+      if ((Switch_StableState[i] == 0U) &&
+          (Switch_LastRawState[i] == 1U))
+      {
+        if (ButtonPressCount[i] < 0xFFFFU)
+        {
+          ButtonPressCount[i]++;
+        }
+      }
+
       Switch_StableState[i] = Switch_LastRawState[i];
     }
   }
@@ -806,6 +1079,8 @@ __USED void Custom_Switch_c_Send_Notification(void) /* Property Notification */
 
   return;
 }
+
+/* Diagnostics_Service */
 
 /* USER CODE BEGIN FD_LOCAL_FUNCTIONS*/
 

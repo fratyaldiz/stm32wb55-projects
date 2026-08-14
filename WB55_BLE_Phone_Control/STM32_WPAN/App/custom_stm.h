@@ -40,6 +40,12 @@ typedef enum
   CUSTOM_STM_VDDA_C,
   CUSTOM_STM_UPTIME_C,
   CUSTOM_STM_RESET_C,
+  /* Diagnostics_Service */
+  CUSTOM_STM_CONN_STATS,
+  CUSTOM_STM_BUTTON_CNT,
+  CUSTOM_STM_SW_RESET,
+  CUSTOM_STM_CONN_TIME,
+  CUSTOM_STM_CLEAR_DIAG,
 } Custom_STM_Char_Opcode_t;
 
 typedef enum
@@ -57,6 +63,16 @@ typedef enum
   CUSTOM_STM_UPTIME_C_READ_EVT,
   /* Reset_Reason */
   CUSTOM_STM_RESET_C_READ_EVT,
+  /* BLE_Connection_Stats */
+  CUSTOM_STM_CONN_STATS_READ_EVT,
+  /* Button_Press_Counters */
+  CUSTOM_STM_BUTTON_CNT_READ_EVT,
+  /* Software_Reset */
+  CUSTOM_STM_SW_RESET_WRITE_EVT,
+  /* Connection_Duration */
+  CUSTOM_STM_CONN_TIME_READ_EVT,
+  /* Clear_Diagnostics */
+  CUSTOM_STM_CLEAR_DIAG_WRITE_EVT,
   CUSTOM_STM_NOTIFICATION_COMPLETE_EVT,
 
   CUSTOM_STM_BOOT_REQUEST_EVT
@@ -87,6 +103,11 @@ extern uint16_t SizeSwitch_C;
 extern uint16_t SizeVdda_C;
 extern uint16_t SizeUptime_C;
 extern uint16_t SizeReset_C;
+extern uint16_t SizeConn_Stats;
+extern uint16_t SizeButton_Cnt;
+extern uint16_t SizeSw_Reset;
+extern uint16_t SizeConn_Time;
+extern uint16_t SizeClear_Diag;
 
 /* USER CODE BEGIN EC */
 
