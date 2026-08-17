@@ -33,6 +33,15 @@ NUCLEO-WB55RG üzerinde BLE ile telefon (iPhone / ST BLE Toolbox) kontrolü. Cih
 - P2P Server ve Health Thermometer aynı anda çalışıyor
 - Detay: bkz. [`WB55_BLE_Phone_Control/README.md`](WB55_BLE_Phone_Control/README.md)
 
+### WB55_FreeRTOS_Basics — FreeRTOS / CMSIS-RTOS2 Temelleri
+NUCLEO-WB55RG üzerinde FreeRTOS öğrenme projesi. Terminal çıktısı USART1 VCP (PB6/PB7, 115200 8N1).
+- Task + scheduler (BlueLedTask/GreenLedTask), Queue (`ButtonQueue`, 500/100 ms blink)
+- SW1/PC4 EXTI + binary semaphore (`ButtonSemaphore`) + debounce
+- Ortak USART1 kaynağı için `UartSemaphore`
+- Priority inversion (binary semaphore) ve mutex priority inheritance (`ResourceMutex`, `osMutexPrioInherit`) demoları
+- FreeRTOS `configTOTAL_HEAP_SIZE` = 24 KB
+- Detay: bkz. [`WB55_FreeRTOS_Basics/README.md`](WB55_FreeRTOS_Basics/README.md)
+
 ## Donanım
 - Kart: NUCLEO-WB55RG (MB1355D-01), MCU STM32WB55RGV6
 - Araçlar: STM32CubeMX + STM32CubeIDE
