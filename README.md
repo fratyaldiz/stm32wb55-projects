@@ -33,14 +33,17 @@ NUCLEO-WB55RG üzerinde BLE ile telefon (iPhone / ST BLE Toolbox) kontrolü. Cih
 - P2P Server ve Health Thermometer aynı anda çalışıyor
 - Detay: bkz. [`WB55_BLE_Phone_Control/README.md`](WB55_BLE_Phone_Control/README.md)
 
-### WB55_FreeRTOS_Basics — FreeRTOS / CMSIS-RTOS2 Temelleri
-NUCLEO-WB55RG üzerinde FreeRTOS öğrenme projesi. Terminal çıktısı USART1 VCP (PB6/PB7, 115200 8N1).
-- Task + scheduler (BlueLedTask/GreenLedTask), Queue (`ButtonQueue`, 500/100 ms blink)
-- SW1/PC4 EXTI + binary semaphore (`ButtonSemaphore`) + debounce
-- Ortak USART1 kaynağı için `UartSemaphore`
-- Priority inversion (binary semaphore) ve mutex priority inheritance (`ResourceMutex`, `osMutexPrioInherit`) demoları
-- FreeRTOS `configTOTAL_HEAP_SIZE` = 24 KB
-- Detay: bkz. [`WB55_FreeRTOS_Basics/README.md`](WB55_FreeRTOS_Basics/README.md)
+## FreeRTOS Projeleri
+
+İki ayrı FreeRTOS projesi (CMSIS-RTOS2, NUCLEO-WB55RG, USART1 VCP PB6/PB7 115200 8N1):
+
+| Proje | Amaç | Ana Konular | Durum |
+|-------|------|-------------|-------|
+| [WB55_FreeRTOS_Basics](WB55_FreeRTOS_Basics/README.md) | FreeRTOS temellerini aşama aşama öğrenme laboratuvarı | Tasks, priority, queue, semaphore, mutex, event flags, software timers, stack monitoring + overflow detection | Kararlı öğrenme serisi (aktif aşama: stack monitoring / overflow) |
+| [WB55_FreeRTOS_Control_System](WB55_FreeRTOS_Control_System/README.md) | Aynı kavramları tek bir gömülü kontrol-sistemi mimarisinde entegre kullanma | Tasks + priority + queue + semaphore + mutex (priority inheritance) + event flags | Geliştirme aşamasında — Stage 5 |
+
+- **WB55_FreeRTOS_Basics** — her RTOS kavramı ayrı bir aşamada gerçek çevre birimleri (UART/LED/buton) ile denenip doğrulanır. Depo anlık görüntüsü en son tamamlanan aşamayı (stack monitoring + overflow detection) aktif firmware olarak yansıtır; önceki aşamaların kodu referans olarak korunur.
+- **WB55_FreeRTOS_Control_System** — SW1 → EXTI → semaphore → ButtonTask → queue → ControlTask → event flags → LedTask zinciri. `ControlTask` sistem durumunun karar vericisidir; şu an IDLE ↔ RUNNING geçişi çalışıyor (WARNING/FAULT, software timers, UART CLI planlanan aşamalar).
 
 ## Donanım
 - Kart: NUCLEO-WB55RG (MB1355D-01), MCU STM32WB55RGV6
