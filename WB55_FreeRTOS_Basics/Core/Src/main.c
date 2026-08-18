@@ -1,20 +1,37 @@
 /* USER CODE BEGIN Header */
+
 /**
+
   ******************************************************************************
+
   * @file           : main.c
+
   * @brief          : Main program body
+
   ******************************************************************************
+
   * @attention
+
   *
+
   * Copyright (c) 2026 STMicroelectronics.
+
   * All rights reserved.
+
   *
+
   * This software is licensed under terms that can be found in the LICENSE file
+
   * in the root directory of this software component.
+
   * If no LICENSE file comes with this software, it is provided AS-IS.
+
   *
+
   ******************************************************************************
+
   */
+
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -25,6 +42,8 @@
 /* USER CODE BEGIN Includes */
 
 #include <string.h>
+
+#include <stdio.h>
 
 /* USER CODE END Includes */
 
@@ -37,8 +56,20 @@
 /* USER CODE BEGIN PD */
 
 #define BLUE_LED_SLOW_PERIOD_MS     500U
+
 #define BLUE_LED_FAST_PERIOD_MS     100U
+
 #define GREEN_LED_PERIOD_MS        1000U
+
+#define BLUE_EVENT_FLAG            (1U << 0)
+
+#define GREEN_EVENT_FLAG           (1U << 1)
+
+#define LED_EVENTS_MASK            (BLUE_EVENT_FLAG | GREEN_EVENT_FLAG)
+
+#define PERIODIC_TIMER_PERIOD_MS    1000U
+
+#define ONE_SHOT_TIMER_PERIOD_MS    5000U
 
 /* USER CODE END PD */
 
@@ -99,16 +130,32 @@ const osThreadAttr_t HighTask_attributes = {
   .priority = (osPriority_t) osPriorityAboveNormal,
   .stack_size = 128 * 4
 };
+/* Definitions for MonitorTask */
+osThreadId_t MonitorTaskHandle;
+const osThreadAttr_t MonitorTask_attributes = {
+  .name = "MonitorTask",
+  .priority = (osPriority_t) osPriorityLow,
+  .stack_size = 512 * 4
+};
 /* Definitions for ButtonQueue */
 osMessageQueueId_t ButtonQueueHandle;
 const osMessageQueueAttr_t ButtonQueue_attributes = {
   .name = "ButtonQueue"
 };
+/* Definitions for PeriodicTimer */
+osTimerId_t PeriodicTimerHandle;
+const osTimerAttr_t PeriodicTimer_attributes = {
+  .name = "PeriodicTimer"
+};
+/* Definitions for OneShotTimer */
+osTimerId_t OneShotTimerHandle;
+const osTimerAttr_t OneShotTimer_attributes = {
+  .name = "OneShotTimer"
+};
 /* Definitions for ResourceMutex */
 osMutexId_t ResourceMutexHandle;
 const osMutexAttr_t ResourceMutex_attributes = {
-  .name = "ResourceMutex",
-  .attr_bits = osMutexPrioInherit
+  .name = "ResourceMutex"
 };
 /* Definitions for ButtonSemaphore */
 osSemaphoreId_t ButtonSemaphoreHandle;
@@ -125,9 +172,15 @@ osSemaphoreId_t ResourceSemaphoreHandle;
 const osSemaphoreAttr_t ResourceSemaphore_attributes = {
   .name = "ResourceSemaphore"
 };
+/* Definitions for SystemEvents */
+osEventFlagsId_t SystemEventsHandle;
+const osEventFlagsAttr_t SystemEvents_attributes = {
+  .name = "SystemEvents"
+};
 /* USER CODE BEGIN PV */
 
 static volatile uint8_t demoLowHasResource = 0U;
+
 static volatile uint8_t demoHighWaiting = 0U;
 
 /* USER CODE END PV */
@@ -144,20 +197,23 @@ void StartUartTask(void *argument);
 void StartTask05(void *argument);
 void StartTask06(void *argument);
 void StartTask07(void *argument);
+void StartMonitorTask(void *argument);
+void PTCallback(void *argument);
+void OSTCallback(void *argument);
 
 /* USER CODE BEGIN PFP */
 
 static void UART_Log(const char *message);
+
+static void UART_LogStackInfo(const char *taskName,
+                              osThreadId_t taskHandle,
+                              uint32_t totalStackBytes);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-/*
- * Priority inversion deneyindeki terminal mesajlarini tek UART uzerinden
- * duzgun satirlar halinde gonderebilmek icin mevcut UartSemaphore'u kullanir.
- */
 static void UART_Log(const char *message)
 {
   if (osSemaphoreAcquire(UartSemaphoreHandle, osWaitForever) == osOK)
@@ -171,6 +227,42 @@ static void UART_Log(const char *message)
 
     (void)osSemaphoreRelease(UartSemaphoreHandle);
   }
+}
+
+static void UART_LogStackInfo(const char *taskName,
+                              osThreadId_t taskHandle,
+                              uint32_t totalStackBytes)
+{
+  char line[128];
+  uint32_t minFreeBytes;
+  uint32_t maxUsedBytes;
+
+  /*
+   * Bir task'in simdiye kadar gordugu minimum bos stack miktarini
+   * byte cinsinden al.
+   */
+  minFreeBytes = osThreadGetStackSpace(taskHandle);
+
+  if (minFreeBytes <= totalStackBytes)
+  {
+    maxUsedBytes = totalStackBytes - minFreeBytes;
+  }
+  else
+  {
+    maxUsedBytes = 0U;
+  }
+
+  (void)snprintf(
+      line,
+      sizeof(line),
+      "%-12s total=%4lu B | min free=%4lu B | max used~=%4lu B\r\n",
+      taskName,
+      (unsigned long)totalStackBytes,
+      (unsigned long)minFreeBytes,
+      (unsigned long)maxUsedBytes
+  );
+
+  UART_Log(line);
 }
 
 /* USER CODE END 0 */
@@ -211,11 +303,17 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   /*
+
    * Both LEDs start OFF.
+
    * CubeMX already initializes them LOW,
+
    * but keeping the intended initial state clear is useful.
+
    */
+
   HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, GPIO_PIN_RESET);
+
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
   /* USER CODE END 2 */
@@ -227,7 +325,9 @@ int main(void)
   ResourceMutexHandle = osMutexNew(&ResourceMutex_attributes);
 
   /* USER CODE BEGIN RTOS_MUTEX */
+
   /* add mutexes, ... */
+
   /* USER CODE END RTOS_MUTEX */
 
   /* Create the semaphores(s) */
@@ -241,11 +341,22 @@ int main(void)
   ResourceSemaphoreHandle = osSemaphoreNew(1, 1, &ResourceSemaphore_attributes);
 
   /* USER CODE BEGIN RTOS_SEMAPHORES */
+
   /* add semaphores, ... */
+
   /* USER CODE END RTOS_SEMAPHORES */
 
+  /* Create the timer(s) */
+  /* creation of PeriodicTimer */
+  PeriodicTimerHandle = osTimerNew(PTCallback, osTimerPeriodic, NULL, &PeriodicTimer_attributes);
+
+  /* creation of OneShotTimer */
+  OneShotTimerHandle = osTimerNew(OSTCallback, osTimerOnce, NULL, &OneShotTimer_attributes);
+
   /* USER CODE BEGIN RTOS_TIMERS */
+
   /* start timers, add new ones, ... */
+
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the queue(s) */
@@ -253,7 +364,9 @@ int main(void)
   ButtonQueueHandle = osMessageQueueNew (4, sizeof(uint32_t), &ButtonQueue_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
+
   /* add queues, ... */
+
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -278,12 +391,22 @@ int main(void)
   /* creation of HighTask */
   HighTaskHandle = osThreadNew(StartTask07, NULL, &HighTask_attributes);
 
+  /* creation of MonitorTask */
+  MonitorTaskHandle = osThreadNew(StartMonitorTask, NULL, &MonitorTask_attributes);
+
   /* USER CODE BEGIN RTOS_THREADS */
+
   /* add threads, ... */
+
   /* USER CODE END RTOS_THREADS */
 
+  /* creation of SystemEvents */
+  SystemEventsHandle = osEventFlagsNew(&SystemEvents_attributes);
+
   /* USER CODE BEGIN RTOS_EVENTS */
+
   /* add events, ... */
+
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -293,12 +416,17 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
+
   {
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
   }
+
   /* USER CODE END 3 */
 }
 
@@ -464,101 +592,155 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+
 {
+
   if (GPIO_Pin == SW1_Pin)
+
   {
+
     if (ButtonSemaphoreHandle != NULL)
+
     {
+
       (void)osSemaphoreRelease(ButtonSemaphoreHandle);
+
     }
+
   }
+
 }
 
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
+
 /**
+
   * @brief  Function implementing the BlueLedTask thread.
+
   * @param  argument: Not used
+
   * @retval None
+
   */
+
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
 
   uint32_t blinkPeriod = BLUE_LED_SLOW_PERIOD_MS;
+
   uint32_t newPeriod = BLUE_LED_SLOW_PERIOD_MS;
 
-  /*
-   * BLUE LED TASK
-   *
-   * Queue + LED davranisi aynen korunur.
-   * Priority inversion deneyinin terminal ciktisini temiz tutmak icin
-   * bu task artik UART'a mesaj yazmaz.
-   */
   for (;;)
+
   {
+
     while (osMessageQueueGet(
+
                ButtonQueueHandle,
+
                &newPeriod,
+
                NULL,
+
                0U) == osOK)
+
     {
+
       if ((newPeriod == BLUE_LED_FAST_PERIOD_MS) ||
+
           (newPeriod == BLUE_LED_SLOW_PERIOD_MS))
+
       {
+
         blinkPeriod = newPeriod;
+
       }
+
     }
 
     HAL_GPIO_TogglePin(
+
         LD1_GPIO_Port,
+
         LD1_Pin
+
+    );
+
+    (void)osEventFlagsSet(
+
+        SystemEventsHandle,
+
+        BLUE_EVENT_FLAG
+
     );
 
     osDelay(blinkPeriod);
+
   }
 
   /* USER CODE END 5 */
 }
 
 /* USER CODE BEGIN Header_StartGreenLedTask */
+
 /**
+
   * @brief Function implementing the GreenLedTask thread.
+
   * @param argument: Not used
+
   * @retval None
+
   */
+
 /* USER CODE END Header_StartGreenLedTask */
 void StartGreenLedTask(void *argument)
 {
   /* USER CODE BEGIN StartGreenLedTask */
 
-  /*
-   * GREEN LED TASK
-   *
-   * LED davranisi korunur. Deney ciktisini temiz tutmak icin
-   * bu task bu adimda UART kullanmaz.
-   */
   for (;;)
+
   {
+
     HAL_GPIO_TogglePin(
+
         LD2_GPIO_Port,
+
         LD2_Pin
+
+    );
+
+    (void)osEventFlagsSet(
+
+        SystemEventsHandle,
+
+        GREEN_EVENT_FLAG
+
     );
 
     osDelay(GREEN_LED_PERIOD_MS);
+
   }
 
   /* USER CODE END StartGreenLedTask */
 }
 
 /* USER CODE BEGIN Header_StartButtonTask */
+
 /**
+
 * @brief Function implementing the ButtonTask thread.
+
 * @param argument: Not used
+
 * @retval None
+
 */
+
 /* USER CODE END Header_StartButtonTask */
 void StartButtonTask(void *argument)
 {
@@ -566,34 +748,38 @@ void StartButtonTask(void *argument)
 
   uint8_t fastMode = 0U;
   uint32_t newPeriod;
+  uint32_t i;
+
+  /*
+   * STACK MANAGEMENT DEMO
+   *
+   * 100 byte'lik yerel dizi dogrudan ButtonTask'in stack frame'i
+   * icinde tutuluyor. volatile kullanarak derleyicinin diziyi
+   * optimize edip kaldirmasini engelliyoruz.
+   */
+  volatile uint8_t stackDemoBuffer[100];
+
+  /*
+   * High-water-mark mekanizmasinin bu bolgeyi gercekten kullanilmis
+   * olarak gorebilmesi icin dizinin tamamini bir kez yaziyoruz.
+   */
+  for (i = 0U; i < sizeof(stackDemoBuffer); i++)
+  {
+    stackDemoBuffer[i] = (uint8_t)i;
+  }
 
   for (;;)
   {
-    /*
-     * SW1 interrupt'i gelene kadar burada bekle.
-     * Bu sırada ButtonTask BLOCKED durumundadır.
-     */
     if (osSemaphoreAcquire(
             ButtonSemaphoreHandle,
             osWaitForever) == osOK)
     {
-      /*
-       * Debounce:
-       * Interrupt geldikten sonra 50 ms bekle.
-       */
       osDelay(50);
 
-      /*
-       * Buton hala basılıysa gerçek basış kabul et.
-       * SW1 active-low olduğu için RESET = basılı.
-       */
       if (HAL_GPIO_ReadPin(
               SW1_GPIO_Port,
               SW1_Pin) == GPIO_PIN_RESET)
       {
-        /*
-         * Her basışta hızlı/yavaş mod arasında geç.
-         */
         fastMode ^= 1U;
 
         if (fastMode != 0U)
@@ -605,9 +791,6 @@ void StartButtonTask(void *argument)
           newPeriod = BLUE_LED_SLOW_PERIOD_MS;
         }
 
-        /*
-         * Yeni blink süresini BlueLedTask'e Queue ile gönder.
-         */
         (void)osMessageQueuePut(
             ButtonQueueHandle,
             &newPeriod,
@@ -615,9 +798,8 @@ void StartButtonTask(void *argument)
             0U
         );
 
-        /*
-         * Buton bırakılana kadar bekle.
-         */
+        UART_Log("[BUTTON] SW1 pressed -> Blue LED speed changed.\r\n");
+
         while (HAL_GPIO_ReadPin(
                    SW1_GPIO_Port,
                    SW1_Pin) == GPIO_PIN_RESET)
@@ -625,19 +807,13 @@ void StartButtonTask(void *argument)
           osDelay(10);
         }
 
-        /*
-         * Bırakma anındaki mekanik bounce için.
-         */
         osDelay(20);
 
-        /*
-         * Bounce sırasında semaphore tekrar verilmişse temizle.
-         */
         while (osSemaphoreAcquire(
                    ButtonSemaphoreHandle,
                    0U) == osOK)
         {
-          /* Boş */
+          /* Drain bounce events. */
         }
       }
     }
@@ -647,19 +823,25 @@ void StartButtonTask(void *argument)
 }
 
 /* USER CODE BEGIN Header_StartUartTask */
+
 /**
+
 * @brief Function implementing the UartTask thread.
+
 * @param argument: Not used
+
 * @retval None
+
 */
+
 /* USER CODE END Header_StartUartTask */
 void StartUartTask(void *argument)
 {
   /* USER CODE BEGIN StartUartTask */
 
   /*
-   * Bu deneyde terminal mesajlarini Low/Medium/High task'lari gonderir.
-   * UartTask silinmez; pasif durumda bekler.
+   * Stack Management deneyinde terminali MonitorTask kullanacak.
+   * UartTask mevcut kalir fakat pasif bekler.
    */
   for (;;)
   {
@@ -670,54 +852,23 @@ void StartUartTask(void *argument)
 }
 
 /* USER CODE BEGIN Header_StartTask05 */
+
 /**
+
 * @brief Function implementing the LowTask thread.
+
 * @param argument: Not used
+
 * @retval None
+
 */
+
 /* USER CODE END Header_StartTask05 */
 void StartTask05(void *argument)
 {
   /* USER CODE BEGIN StartTask05 */
 
-  uint32_t workStart;
-
-  /*
-   * LOW PRIORITY TASK - MUTEX TEST
-   *
-   * ResourceMutex'i ilk alan task budur.
-   * HIGH ayni mutex'i isteyince LOW gecici olarak HIGH'in
-   * priority'sini miras alir (priority inheritance).
-   */
-  if (osMutexAcquire(
-          ResourceMutexHandle,
-          osWaitForever) == osOK)
-  {
-    UART_Log("\r\n=== PRIORITY INHERITANCE DEMO - MUTEX ===\r\n");
-    UART_Log("[LOW] Mutex acquired. Starting low-priority work.\r\n");
-
-    /*
-     * HIGH ancak LOW mutex'i gercekten aldiktan sonra devam etsin.
-     */
-    demoLowHasResource = 1U;
-
-    /*
-     * LOW yaklasik 1000 ms CPU isi yapmak istiyor.
-     * HIGH mutex'i beklemeye basladiginda LOW priority inheritance
-     * sayesinde AboveNormal seviyesinde calismaya devam eder.
-     */
-    workStart = HAL_GetTick();
-
-    while ((HAL_GetTick() - workStart) < 1000U)
-    {
-      __NOP();
-    }
-
-    UART_Log("[LOW] Priority inheritance kept LOW ahead of MEDIUM.\r\n");
-    UART_Log("[LOW] Work finished. Releasing mutex now.\r\n");
-
-    (void)osMutexRelease(ResourceMutexHandle);
-  }
+  /* LowTask: not used in the Event Flags demo. */
 
   osThreadExit();
 
@@ -725,44 +876,23 @@ void StartTask05(void *argument)
 }
 
 /* USER CODE BEGIN Header_StartTask06 */
+
 /**
+
 * @brief Function implementing the MediumTask thread.
+
 * @param argument: Not used
+
 * @retval None
+
 */
+
 /* USER CODE END Header_StartTask06 */
 void StartTask06(void *argument)
 {
   /* USER CODE BEGIN StartTask06 */
 
-  uint32_t busyStart;
-
-  /*
-   * HIGH mutex'i istemeye baslayana kadar bekle.
-   */
-  while (demoHighWaiting == 0U)
-  {
-    osDelay(1);
-  }
-
-  /*
-   * Semaphore deneyinde MEDIUM burada LOW'un onune gecmisti.
-   * Mutex + priority inheritance deneyinde ise LOW gecici olarak
-   * AboveNormal oldugu icin MEDIUM, LOW mutex'i birakana kadar
-   * calisma firsati bulamaz.
-   */
-  osDelay(100);
-
-  UART_Log("[MEDIUM] Now running, but only AFTER LOW released the mutex.\r\n");
-
-  busyStart = HAL_GetTick();
-
-  while ((HAL_GetTick() - busyStart) < 1000U)
-  {
-    __NOP();
-  }
-
-  UART_Log("[MEDIUM] CPU work finished.\r\n");
+  /* MediumTask: not used in the Event Flags demo. */
 
   osThreadExit();
 
@@ -770,49 +900,112 @@ void StartTask06(void *argument)
 }
 
 /* USER CODE BEGIN Header_StartTask07 */
+
 /**
+
 * @brief Function implementing the HighTask thread.
+
 * @param argument: Not used
+
 * @retval None
+
 */
+
 /* USER CODE END Header_StartTask07 */
 void StartTask07(void *argument)
 {
   /* USER CODE BEGIN StartTask07 */
 
-  /*
-   * LOW mutex'i almadan HIGH devam etmesin.
-   */
-  while (demoLowHasResource == 0U)
-  {
-    osDelay(1);
-  }
-
-  UART_Log("[HIGH] Wants the mutex. HIGH will BLOCK for a short time.\r\n");
-
-  /*
-   * Bu bayrak MEDIUM'a deney basladi bilgisini verir.
-   */
-  demoHighWaiting = 1U;
-
-  /*
-   * Mutex LOW'da oldugu icin HIGH burada BLOCKED olur.
-   * Fakat ResourceMutex priority inheritance kullandigi icin
-   * LOW gecici olarak HIGH priority seviyesine yukselir.
-   */
-  if (osMutexAcquire(
-          ResourceMutexHandle,
-          osWaitForever) == osOK)
-  {
-    UART_Log("[HIGH] Mutex acquired! MEDIUM could not delay LOW.\r\n");
-    UART_Log("=== END OF MUTEX / PRIORITY INHERITANCE DEMO ===\r\n\r\n");
-
-    (void)osMutexRelease(ResourceMutexHandle);
-  }
+  /* HighTask: not used in the Event Flags demo. */
 
   osThreadExit();
 
   /* USER CODE END StartTask07 */
+}
+
+/* USER CODE BEGIN Header_StartMonitorTask */
+
+/**
+
+* @brief Function implementing the MonitorTask thread.
+
+* @param argument: Not used
+
+* @retval None
+
+*/
+
+/* USER CODE END Header_StartMonitorTask */
+void StartMonitorTask(void *argument)
+{
+  /* USER CODE BEGIN StartMonitorTask */
+
+  osDelay(1500);
+
+  UART_Log("\r\n=== FREERTOS STACK MONITOR ===\r\n");
+  UART_Log("min free = simdiye kadar gorulen EN AZ bos stack miktari\r\n");
+  UART_Log("Deger ne kadar kucukse stack sinirina o kadar yaklasilmistir.\r\n\r\n");
+
+  for (;;)
+  {
+    UART_Log("--------------- STACK REPORT ---------------\r\n");
+
+    UART_LogStackInfo(
+        "BlueLedTask",
+        BlueLedTaskHandle,
+        (uint32_t)BlueLedTask_attributes.stack_size
+    );
+
+    UART_LogStackInfo(
+        "GreenLedTask",
+        GreenLedTaskHandle,
+        (uint32_t)GreenLedTask_attributes.stack_size
+    );
+
+    UART_LogStackInfo(
+        "ButtonTask",
+        ButtonTaskHandle,
+        (uint32_t)ButtonTask_attributes.stack_size
+    );
+
+    UART_LogStackInfo(
+        "UartTask",
+        UartTaskHandle,
+        (uint32_t)UartTask_attributes.stack_size
+    );
+
+    UART_LogStackInfo(
+        "MonitorTask",
+        MonitorTaskHandle,
+        (uint32_t)MonitorTask_attributes.stack_size
+    );
+
+    UART_Log("--------------------------------------------\r\n\r\n");
+
+    osDelay(3000);
+  }
+
+  /* USER CODE END StartMonitorTask */
+}
+
+/* PTCallback function */
+void PTCallback(void *argument)
+{
+  /* USER CODE BEGIN PTCallback */
+
+  /* Software Timer deneyi tamamlandi; bu adimda callback pasif. */
+
+  /* USER CODE END PTCallback */
+}
+
+/* OSTCallback function */
+void OSTCallback(void *argument)
+{
+  /* USER CODE BEGIN OSTCallback */
+
+  /* Software Timer deneyi tamamlandi; bu adimda callback pasif. */
+
+  /* USER CODE END OSTCallback */
 }
 
 /**
@@ -848,7 +1041,9 @@ void Error_Handler(void)
   __disable_irq();
 
   while (1)
+
   {
+
   }
 
   /* USER CODE END Error_Handler_Debug */
@@ -866,7 +1061,9 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE BEGIN 6 */
 
   /*
+
    * User can add his own implementation here.
+
    */
 
   /* USER CODE END 6 */

@@ -1,118 +1,114 @@
-# WB55_FreeRTOS_Basics — FreeRTOS / CMSIS-RTOS2 Learning Project
+# WB55_FreeRTOS_Basics — FreeRTOS Learning Laboratory (STM32WB55)
 
-Hands-on FreeRTOS examples on the NUCLEO-WB55RG board: tasks, queues,
-interrupt-driven semaphores, a shared-resource mutex, and live demos of
-**priority inversion** vs **priority inheritance** — all observed over a UART
-terminal.
+A hands-on FreeRTOS learning project on the NUCLEO-WB55RG board. Each core RTOS
+concept is implemented and validated **stage by stage** against real peripherals
+(UART, LEDs, a push button), so the concepts can be studied — and demonstrated —
+one at a time rather than as abstract theory.
 
-Internship / learning project. Generated with STM32CubeMX, built with STM32CubeIDE.
-CMSIS-RTOS2 API on top of the FreeRTOS kernel.
+Internship / learning project. Generated with STM32CubeMX, built with STM32CubeIDE
+2.2.0, using the **CMSIS-RTOS2** API on top of the FreeRTOS kernel.
+
+## Project Overview
+
+The goal of this project is to learn the fundamentals of FreeRTOS on STM32 by
+building a small, focused experiment for each concept and observing its behaviour
+over a UART terminal and the on-board LEDs.
+
+Because it is organised as a progression of stages, the repository snapshot always
+reflects the **most recently completed stage** as the actively running firmware,
+while the code from earlier stages is kept in the project for reference. The
+current active build demonstrates **task stack monitoring and stack-overflow
+detection**; the earlier concepts below were each validated in their own stage.
 
 ## Hardware
 
 - Board: **NUCLEO-WB55RG** (MB1355), MCU **STM32WB55RGV6**
-- Button: **SW1 = PC4** (EXTI, falling edge)
-- On-board LEDs used by the LED tasks (blue / green)
-- UART: **USART1** routed to the ST-LINK Virtual COM Port
-  - **PB6 = USART1_TX**, **PB7 = USART1_RX**
-  - **115200 baud, 8-N-1, no flow control**
+- LEDs: **LD1 (blue) = PB5**, **LD2 (green) = PB0**
+- Button: **SW1 = PC4**, GPIO **EXTI**, falling edge, pull-up
+- UART: **USART1** on the ST-LINK Virtual COM Port — **PB6 = TX**, **PB7 = RX**,
+  **115200 baud, 8-N-1**, no flow control
+- HAL time base: **TIM17** (so SysTick is free for the RTOS)
 
-> UART note: the ST-LINK VCP on this board is wired to **USART1** (`huart1`),
-> **not** LPUART1. The project uses `HAL_UART_Transmit(&huart1, …)`.
+## FreeRTOS Concepts Demonstrated
 
-## Software / Tools
+| Concept | How it is exercised | State in current build |
+|---|---|---|
+| Tasks & scheduler | Multiple `osThreadNew` tasks, `osDelay`, READY/RUNNING/BLOCKED | Active |
+| Task priorities & preemption | Tasks created at different CMSIS priorities | Active |
+| Queue | Button task sends a blink period to an LED task | Active |
+| Binary semaphore | SW1 EXTI ISR releases a semaphore that unblocks a task | Active |
+| GPIO EXTI → semaphore → task | ISR only signals; work is done in task context | Active |
+| UART communication | `HAL_UART_Transmit` on `huart1`, strings + numeric values | Active |
+| Shared UART synchronisation | A semaphore serialises access to the shared USART1 | Active |
+| Mutex, priority inversion, priority inheritance | Low/Medium/High tasks + a mutex, observed over UART | Validated in an earlier stage (code retained, not active in the current build) |
+| Event flags | Event-flag object created and signalled to represent state | Validated in an earlier stage (retained) |
+| Software timers (periodic + one-shot) | `osTimerNew` periodic and one-shot timers | Validated in an earlier stage (timers created, callbacks passive in the current build) |
+| Stack management & monitoring | Per-task stack high-water-mark via `osThreadGetStackSpace` | **Active (current stage)** |
+| Stack overflow detection | `configCHECK_FOR_STACK_OVERFLOW = 2` + `vApplicationStackOverflowHook` | Active |
 
-- STM32CubeMX (project generation, `.ioc`)
-- STM32CubeIDE 2.2.0 (build + flash + debug)
-- FreeRTOS kernel via the **CMSIS-RTOS2** wrapper (`osThreadNew`, `osMessageQueue*`,
-  `osSemaphore*`, `osMutex*`, `osDelay`)
-- Any serial terminal (115200 8-N-1) on the ST-LINK COM port
+> The table is honest about the staged nature of the project: only the concepts
+> marked *Active* run in the firmware image built from this snapshot. The others
+> were implemented and verified in their own stage and left in the source as
+> learning reference.
 
-## Topics Covered
+## Peripherals Used
 
-### 1. Tasks & Scheduler
-- `BlueLedTask`, `GreenLedTask` created with `osThreadNew` at different priorities.
-- Illustrates the scheduler and READY / RUNNING / BLOCKED states; tasks yield the
-  CPU with `osDelay()`.
+- **GPIO** — LEDs (PB5, PB0) and the SW1 button (PC4, EXTI falling edge, pull-up)
+- **USART1** — 115200 8-N-1 over the ST-LINK VCP for terminal output
+- **TIM17** — HAL time base
+- **NVIC / EXTI** — SW1 external interrupt feeding a binary semaphore
 
-### 2. Queue
-- `ButtonQueue` carries a blink period from `ButtonTask` to `BlueLedTask`.
-- Button presses toggle the LED blink mode between **500 ms** and **100 ms**.
+## Architecture / Learning Progression
 
-### 3. Interrupt + Binary Semaphore
-- **SW1 / PC4** EXTI, falling edge. `HAL_GPIO_EXTI_Callback()` releases
-  `ButtonSemaphore` from the ISR.
-- `ButtonTask` blocks on `osSemaphoreAcquire(ButtonSemaphore, …)`.
-- Software **debounce**, so one physical press produces a single action even when
-  the button is held.
+The project grew as a sequence of stages, each adding one FreeRTOS mechanism on top
+of the previous ones:
 
-### 4. UART Output
-- `HAL_UART_Transmit()` on `huart1` sends strings and numeric values converted to
-  ASCII, viewed on the terminal.
+1. Tasks, scheduler and priorities (LED tasks blinking at task priority).
+2. Queue — a button task pushes a blink period to an LED task.
+3. Interrupt-driven binary semaphore — SW1 EXTI wakes a task (with debounce).
+4. UART output and a semaphore that guards the shared USART1 resource.
+5. Mutex with Low/Medium/High tasks to observe **priority inversion** and how a
+   priority-inheritance mutex resolves it.
+6. Event flags and software timers (periodic and one-shot).
+7. **Stack management** — measuring per-task stack head-room and detecting overflow.
 
-### 5. Shared-resource Binary Semaphore
-- `UartSemaphore` guards the shared **USART1** resource so `BlueLedTask` and
-  `GreenLedTask` never interleave their output.
-- `osSemaphoreAcquire()` before printing, `osSemaphoreRelease()` after.
+Each stage was tested on the board before moving on, so the codebase doubles as a
+step-by-step reference.
 
-### 6. Priority Inversion (binary semaphore)
-- `LowTask` = *BelowNormal*, `MediumTask` = *Normal*, `HighTask` = *AboveNormal*,
-  sharing `ResourceSemaphore`.
-- LOW takes the resource; HIGH waits for it; MEDIUM preempts LOW, making HIGH wait
-  even longer — classic **priority inversion**, visible on the terminal.
+## Stack Monitoring and Overflow Detection
 
-### 7. Mutex + Priority Inheritance
-- Same three tasks, but the shared resource is a CMSIS-RTOS2 **mutex**
-  (`ResourceMutex`, created with `osMutexPrioInherit`).
-- While HIGH blocks on the mutex, LOW temporarily inherits a higher priority, so
-  MEDIUM can no longer delay LOW — **priority inheritance** solves the inversion.
+The current active stage focuses on stack safety:
 
-Example terminal output of the mutex demo:
+- **Monitoring:** a dedicated `MonitorTask` periodically prints each task's minimum
+  free stack ("high-water-mark") over UART using `osThreadGetStackSpace()`. A small
+  `volatile` demo buffer inside the button task shows how stack usage moves the
+  high-water-mark.
+- **Overflow detection:** FreeRTOS is configured with
+  `configCHECK_FOR_STACK_OVERFLOW = 2` and implements `vApplicationStackOverflowHook`.
+  Overflow was reproduced **only as a controlled test** by temporarily oversizing a
+  task's local data; the code in this snapshot is back to a **safe** state, so no
+  task is intentionally overflowing its stack.
+- FreeRTOS heap: `configTOTAL_HEAP_SIZE = 24576` bytes — raised as more tasks and
+  kernel objects were added; see `Core/Inc/FreeRTOSConfig.h`.
 
-```text
-=== PRIORITY INHERITANCE DEMO - MUTEX ===
-[LOW] Mutex acquired. Starting low-priority work.
-[HIGH] Wants the mutex. HIGH will BLOCK for a short time.
-[LOW] Priority inheritance kept LOW ahead of MEDIUM.
-[LOW] Work finished. Releasing mutex now.
-[HIGH] Mutex acquired! MEDIUM could not delay LOW.
-=== END OF MUTEX / PRIORITY INHERITANCE DEMO ===
+## Build / Run
 
-[MEDIUM] Now running, but only AFTER LOW released the mutex.
-[MEDIUM] CPU work finished.
-```
-
-## FreeRTOS Heap
-
-Adding the extra demo tasks needed more kernel heap, so the CubeMX FreeRTOS
-`configTOTAL_HEAP_SIZE` was raised to **24576 bytes (24 KB)** — see
-`Core/Inc/FreeRTOSConfig.h`. Keep this value; a smaller heap makes task/object
-creation fail.
-
-## How to Build
-
-1. Open **STM32CubeIDE** and import this folder as an existing project
-   (`File → Open Projects from File System…` → select `WB55_FreeRTOS_Basics`).
+1. Open **STM32CubeIDE** and import this folder as an existing project.
 2. Build (`Project → Build Project`) and flash to the NUCLEO-WB55RG.
+3. Open the ST-LINK COM port at **115200 8-N-1** to watch the task/stack output;
+   press **SW1** to interact.
 
-Only source and project files needed to rebuild are committed. Build outputs
-(`Debug/`, `.elf`, `.map`, `.list`, `.o`, `.d`, `.su`, `.cyclo`, …) are excluded via
-`.gitignore`.
+Clean rebuild (STM32CubeIDE 2.2.0 toolchain): **0 errors, 0 warnings**
+(ELF `text 40428 / data 96 / bss 30320` bytes; `bss` includes the 24 KB FreeRTOS
+heap).
 
-> When re-generating from the `.ioc` in CubeMX, keep all user code inside the
-> `/* USER CODE BEGIN … */ … /* USER CODE END … */` sections.
+## Repository Notes
 
-## How to Test
-
-1. Flash the firmware and open the ST-LINK COM port at **115200 8-N-1**.
-2. Watch the task output; press **SW1** to change the LED blink period.
-3. Observe the priority-inversion and priority-inheritance demos printed on the
-   terminal.
-
-## Current Status
-
-- FreeRTOS tasks, queue, interrupt semaphore, shared UART semaphore, priority
-  inversion and mutex priority-inheritance demos — all working on the board.
-- **Build:** `0 errors, 0 warnings` (clean rebuild, STM32CubeIDE 2.2.0 toolchain).
-  ELF links (`text 35720 / data 96 / bss 30296` bytes; `bss` includes the 24 KB
-  FreeRTOS heap).
+- Build outputs (`Debug/`, `.elf`, `.map`, `.list`, `.o`, `.d`, `.su`, `.cyclo`) are
+  excluded via `.gitignore`; only source and project files needed to rebuild are
+  committed.
+- When re-generating from the `.ioc` in CubeMX, keep user code inside the
+  `/* USER CODE BEGIN … */ … /* USER CODE END … */` sections.
+- For an **integrated** use of these same concepts inside a single control-system
+  architecture, see the sibling project
+  [`WB55_FreeRTOS_Control_System`](../WB55_FreeRTOS_Control_System/README.md).
