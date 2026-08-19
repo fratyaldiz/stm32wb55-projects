@@ -40,10 +40,10 @@ NUCLEO-WB55RG üzerinde BLE ile telefon (iPhone / ST BLE Toolbox) kontrolü. Cih
 | Proje | Amaç | Ana Konular | Durum |
 |-------|------|-------------|-------|
 | [WB55_FreeRTOS_Basics](WB55_FreeRTOS_Basics/README.md) | FreeRTOS temellerini aşama aşama öğrenme laboratuvarı | Tasks, priority, queue, semaphore, mutex, event flags, software timers, stack monitoring + overflow detection | Kararlı öğrenme serisi (aktif aşama: stack monitoring / overflow) |
-| [WB55_FreeRTOS_Control_System](WB55_FreeRTOS_Control_System/README.md) | Aynı kavramları tek bir gömülü kontrol-sistemi mimarisinde entegre kullanma | Tasks + priority + queue + semaphore + mutex (priority inheritance) + event flags | Geliştirme aşamasında — Stage 5 |
+| [WB55_FreeRTOS_Control_System](WB55_FreeRTOS_Control_System/README.md) | Aynı kavramları tek bir gömülü kontrol-sistemi mimarisinde entegre kullanma | Tasks + priority + queue + binary semaphore + mutex (priority inheritance) + event flags + software timers + kesme tabanlı UART komut arayüzü + state machine + stack monitoring | Tamamlandı — Stage 8 (final integration) |
 
 - **WB55_FreeRTOS_Basics** — her RTOS kavramı ayrı bir aşamada gerçek çevre birimleri (UART/LED/buton) ile denenip doğrulanır. Depo anlık görüntüsü en son tamamlanan aşamayı (stack monitoring + overflow detection) aktif firmware olarak yansıtır; önceki aşamaların kodu referans olarak korunur.
-- **WB55_FreeRTOS_Control_System** — SW1 → EXTI → semaphore → ButtonTask → queue → ControlTask → event flags → LedTask zinciri. `ControlTask` sistem durumunun karar vericisidir; şu an IDLE ↔ RUNNING geçişi çalışıyor (WARNING/FAULT, software timers, UART CLI planlanan aşamalar).
+- **WB55_FreeRTOS_Control_System** — SW1 → EXTI → semaphore → ButtonTask → queue → ControlTask → event flags → LedTask zinciri. `ControlTask` sistem durumunun (IDLE/RUNNING/WARNING/FAULT) tek karar vericisidir. Software timers (5 s periodic heartbeat, 10 s one-shot RUNNING→WARNING) ve kesme tabanlı UART CLI (`start/stop/warn/fault/reset/status/stack/help`) queue üzerinden komut üretir; `osThreadGetStackSpace` ile stack watermark izlenir. Tüm state machine ve buton akışı kart üzerinde doğrulandı.
 
 ## Donanım
 - Kart: NUCLEO-WB55RG (MB1355D-01), MCU STM32WB55RGV6
