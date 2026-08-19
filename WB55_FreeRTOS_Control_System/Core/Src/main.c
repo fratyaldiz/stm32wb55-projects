@@ -51,6 +51,8 @@
 #include "rtos/button_semaphore.h"
 #include "rtos/uart_mutex.h"
 #include "rtos/system_events.h"
+#include "rtos/app_timers.h"
+#include "rtos/uart_cli.h"
 
 /* USER CODE END Includes */
 
@@ -193,18 +195,35 @@ int main(void)
 
   /* USER CODE BEGIN RTOS_TIMERS */
 
-  /* start timers, add new ones, ... */
+  /*
+   * FREERTOS CONCEPT: SOFTWARE TIMERS
+   *
+   * - HeartbeatTimer   : periodic
+   * - RunWarningTimer  : one-shot
+   *
+   * Full implementation:
+   * Core/Src/rtos/app_timers.c
+   */
+  AppTimers_Init();
 
-  /* USER CODE END RTOS_TIMERS */
+/* USER CODE END RTOS_TIMERS */
 
   /* USER CODE BEGIN RTOS_QUEUES */
 
   /*
-   * FREERTOS CONCEPT: QUEUE
-   * Queue creation itself is implemented in:
-   * Core/Src/rtos/command_queue.c
+   * Application command queue:
+   * ButtonTask / UartRxTask / Timer callbacks -> ControlTask
    */
   CommandQueue_Init();
+
+  /*
+   * USART1 receive-byte queue:
+   * UART ISR -> UartRxTask
+   *
+   * Full UART command implementation:
+   * Core/Src/rtos/uart_cli.c
+   */
+  UartCli_Init();
 
 /* USER CODE END RTOS_QUEUES */
 

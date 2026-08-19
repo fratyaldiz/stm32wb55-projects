@@ -15,9 +15,12 @@
  * Stage 2 producer:
  *   - ButtonTask
  *
- * Later producers:
+ * Producers:
+ *   - ButtonTask
+ *   - Software Timer callbacks
+ *
+ * Later producer:
  *   - UartRxTask
- *   - Software Timer callback
  *
  * Consumer:
  *   - ControlTask
@@ -38,7 +41,10 @@ typedef enum
     APP_CMD_RESET,
     APP_CMD_STATUS,
     APP_CMD_STACK,
-    APP_CMD_WARNING_TIMEOUT
+
+    /* Software Timer generated commands */
+    APP_CMD_TIMER_HEARTBEAT,
+    APP_CMD_RUN_TIMEOUT
 } AppCommandType_t;
 
 typedef enum
